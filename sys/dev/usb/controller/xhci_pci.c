@@ -234,7 +234,7 @@ xhci_pci_probe(device_t self)
 {
 	const char *desc = xhci_pci_match(self);
 
-	if (desc) {
+	if (desc) { // (0) find pci xhci ctrl
 		device_set_desc(self, desc);
 		return (BUS_PROBE_DEFAULT);
 	} else {
@@ -283,7 +283,7 @@ xhci_pci_port_route(device_t self, uint32_t set, uint32_t clear)
 }
 
 int
-xhci_pci_attach(device_t self)
+xhci_pci_attach(device_t self) // (1) init xhci pci ctrl
 {
 	struct xhci_softc *sc = device_get_softc(self);
 	int count, err, msix_table, rid;
@@ -333,7 +333,7 @@ xhci_pci_attach(device_t self)
 		break;
 	}
 
-	if (xhci_init(sc, self, usedma32)) {
+	if (xhci_init(sc, self, usedma32)) { // (2) init xhci ctrl
 		device_printf(self, "Could not initialize softc\n");
 		bus_release_resource(self, SYS_RES_MEMORY, PCI_XHCI_CBMEM,
 		    sc->sc_io_res);
@@ -344,7 +344,7 @@ xhci_pci_attach(device_t self)
 
 	usb_callout_init_mtx(&sc->sc_callout, &sc->sc_bus.bus_mtx, 0);
 
-	rid = 0;
+	rid = 0; // (3) init pci xhci irq resource
 	if (xhci_use_msix && (msix_table = pci_msix_table_bar(self)) >= 0) {
 		if (msix_table == PCI_XHCI_CBMEM) {
 			sc->sc_msix_res = sc->sc_io_res;
@@ -388,7 +388,7 @@ xhci_pci_attach(device_t self)
 		device_printf(self, "Could not allocate IRQ\n");
 		/* goto error; FALLTHROUGH - use polling */
 	}
-	sc->sc_bus.bdev = device_add_child(self, "usbus", -1);
+	sc->sc_bus.bdev = device_add_child(self, "usbus", -1); // (4) add usbus as child of this pci xhci device
 	if (sc->sc_bus.bdev == NULL) {
 		device_printf(self, "Could not add USB device\n");
 		goto error;
@@ -444,10 +444,10 @@ xhci_pci_attach(device_t self)
 	err = xhci_halt_controller(sc);
 
 	if (err == 0)
-		err = xhci_start_controller(sc);
+		err = xhci_start_controller(sc); // (5) start xhci ctrl
 
 	if (err == 0)
-		err = device_probe_and_attach(sc->sc_bus.bdev);
+		err = device_probe_and_attach(sc->sc_bus.bdev); // (6) probe and attach usb bus usb_probe/usb_attach
 
 	if (err) {
 		device_printf(self, "XHCI halt/start/probe failed err=%d\n", err);

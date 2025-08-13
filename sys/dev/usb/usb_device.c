@@ -506,7 +506,7 @@ usb_init_endpoint(struct usb_device *udev, uint8_t iface_index,
 
 	methods = udev->bus->methods;
 
-	(methods->endpoint_init) (udev, edesc, ep);
+	(methods->endpoint_init) (udev, edesc, ep); // (15) call xhci_ep_init
 
 	/* initialise USB endpoint structure */
 	ep->edesc = edesc;
@@ -535,7 +535,7 @@ usb_init_endpoint(struct usb_device *udev, uint8_t iface_index,
 	/* clear stall, if any */
 	if (methods->clear_stall != NULL) {
 		USB_BUS_LOCK(udev->bus);
-		(methods->clear_stall) (udev, ep);
+		(methods->clear_stall) (udev, ep); // (16) call xhci_ep_clear_stall
 		USB_BUS_UNLOCK(udev->bus);
 	}
 }
@@ -1778,7 +1778,7 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 	for (device_index = USB_ROOT_HUB_ADDR;
 	    (device_index != bus->devices_max) &&
 	    (bus->devices[device_index] != NULL);
-	    device_index++) /* nop */;
+	    device_index++) /* nop */; // (12) find a unused device address base 1
 
 	if (device_index == bus->devices_max) {
 		device_printf(bus->bdev,
@@ -1791,7 +1791,7 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 		    "Invalid device depth\n");
 		return (NULL);
 	}
-	udev = malloc(sizeof(*udev), M_USB, M_WAITOK | M_ZERO);
+	udev = malloc(sizeof(*udev), M_USB, M_WAITOK | M_ZERO); // (13) allocate and init roothub
 #if (USB_HAVE_MALLOC_WAITOK == 0)
 	if (udev == NULL) {
 		return (NULL);
@@ -1871,13 +1871,13 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 	usb_init_endpoint(udev, 0,
 	    &udev->ctrl_ep_desc,
 	    &udev->ctrl_ep_comp_desc,
-	    &udev->ctrl_ep);
+	    &udev->ctrl_ep); // (14) init default ep
 
 	/* set device index */
 	udev->device_index = device_index;
 
 #if USB_HAVE_UGEN
-	/* Create ugen name */
+	/* Create ugen name */ // (17) create device node like /dev/ugen1.1
 	snprintf(udev->ugen_name, sizeof(udev->ugen_name),
 	    USB_GENERIC_NAME "%u.%u", device_get_unit(bus->bdev),
 	    device_index);
@@ -1893,7 +1893,7 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 #endif
 	/* Initialise device */
 	if (bus->methods->device_init != NULL) {
-		err = (bus->methods->device_init) (udev);
+		err = (bus->methods->device_init) (udev); // (18) call xhci_device_init to init device
 		if (err != 0) {
 			DPRINTFN(0, "device init %d failed "
 			    "(%s, ignored)\n", device_index, 
@@ -1905,7 +1905,7 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 	usb_set_device_state(udev, USB_STATE_POWERED);
 
 	if (udev->flags.usb_mode == USB_MODE_HOST) {
-		err = usbd_req_set_address(udev, NULL, device_index);
+		err = usbd_req_set_address(udev, NULL, device_index); // (19) request and assign device address
 
 		/*
 		 * This is the new USB device address from now on, if
@@ -1928,7 +1928,7 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 			    "(%s, ignored)\n", udev->address, 
 			    usbd_errstr(err));
 		}
-	} else {
+	} else { // (x) for device mode
 		/* We are not self powered */
 		udev->flags.self_powered = 0;
 
@@ -1947,11 +1947,11 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 	usb_set_device_state(udev, USB_STATE_ADDRESSED);
 
 	/* setup the device descriptor and the initial "wMaxPacketSize" */
-	err = usbd_setup_device_desc(udev, NULL);
+	err = usbd_setup_device_desc(udev, NULL); // (20) request and get device desc
 
 	if (err != 0) {
 		/* try to enumerate two more times */
-		err = usbd_req_re_enumerate(udev, NULL);
+		err = usbd_req_re_enumerate(udev, NULL); // (21) enumeration could fail in first several times
 		if (err != 0) {
 			err = usbd_req_re_enumerate(udev, NULL);
 			if (err != 0) {
@@ -1964,7 +1964,7 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 	 * Setup temporary USB attach args so that we can figure out some
 	 * basic quirks for this device.
 	 */
-	usb_init_attach_arg(udev, &uaa);
+	usb_init_attach_arg(udev, &uaa); // (22) parse device desc and fill attach arg
 
 	if (usb_test_quirk(&uaa, UQ_BUS_POWERED)) {
 		udev->flags.uq_bus_powered = 1;
@@ -1973,7 +1973,7 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 		udev->flags.no_strings = 1;
 	}
 
-	usb_get_langid(udev);
+	usb_get_langid(udev); // (23) get and parse string desc
 
 	/* assume 100mA bus powered for now. Changed when configured. */
 	udev->power = USB_MIN_POWER;
@@ -2016,7 +2016,7 @@ repeat_set_config:
 	DPRINTF("setting config %u\n", config_index);
 
 	/* get the USB device configured */
-	err = usbd_set_config_index(udev, config_index);
+	err = usbd_set_config_index(udev, config_index); // (23) get config desc and select one config for this device
 	if (err) {
 		if (udev->ddesc.bNumConfigurations != 0) {
 			if (!set_config_failed) {
@@ -2084,7 +2084,7 @@ repeat_set_config:
 
 config_done:
 	DPRINTF("new dev (addr %d), udev=%p, parent_hub=%p\n",
-	    udev->address, udev, udev->parent_hub);
+	    udev->address, udev, udev->parent_hub); // (24) ok, new device is ready
 
 	/* register our device - we are ready */
 	usb_bus_port_set_device(bus, parent_hub ?

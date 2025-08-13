@@ -164,7 +164,7 @@ usb_root_mount_rel(struct usb_bus *bus)
  *	usb_attach
  *------------------------------------------------------------------------*/
 static int
-usb_attach(device_t dev)
+usb_attach(device_t dev) // (7) attach usbbus as child of xhci pci ctrl
 {
 	struct usb_bus *bus = device_get_ivars(dev);
 
@@ -179,9 +179,9 @@ usb_attach(device_t dev)
 	if (usb_no_boot_wait == 0) {
 		/* delay vfs_mountroot until the bus is explored */
 		bus->bus_roothold = root_mount_hold(device_get_nameunit(dev));
-	}
+	} // (8) rootfs could be mounted on some usb device
 #endif
-	usb_attach_sub(dev, bus);
+	usb_attach_sub(dev, bus); // (9) real work of usbbus create
 
 	return (0);			/* return success */
 }
@@ -697,7 +697,7 @@ usb_power_wdog(void *arg)
  * This function attaches USB in context of the explore thread.
  *------------------------------------------------------------------------*/
 static void
-usb_bus_attach(struct usb_proc_msg *pm)
+usb_bus_attach(struct usb_proc_msg *pm) // (10) usb_process pass to here
 {
 	struct usb_bus *bus;
 	struct usb_device *child;
@@ -757,13 +757,13 @@ usb_bus_attach(struct usb_proc_msg *pm)
 	/* make sure power is set at least once */
 
 	if (bus->methods->set_hw_power != NULL) {
-		(bus->methods->set_hw_power) (bus);
+		(bus->methods->set_hw_power) (bus); // (11) call xhci_set_hw_power
 	}
 
 	/* allocate the Root USB device */
 
 	child = usb_alloc_device(bus->bdev, bus, NULL, 0, 0, 1,
-	    speed, USB_MODE_HOST);
+	    speed, USB_MODE_HOST); // (12) allocate and init roothub device
 	if (child) {
 		err = usb_probe_and_attach(child,
 		    USB_IFACE_INDEX_ANY);
@@ -855,7 +855,7 @@ usb_attach_sub(device_t dev, struct usb_bus *bus)
 #endif
 
 #if USB_HAVE_PER_BUS_PROCESS
-	/* Create USB explore and callback processes */
+	/* Create USB explore and callback processes */ // (9) create usb processes
 
 	if (usb_proc_create(USB_BUS_GIANT_PROC(bus),
 	    &bus->bus_mtx, device_get_nameunit(dev), USB_PRI_MED)) {
@@ -883,7 +883,7 @@ usb_attach_sub(device_t dev, struct usb_bus *bus)
 		/* Get final attach going */
 		USB_BUS_LOCK(bus);
 		usb_proc_msignal(USB_BUS_EXPLORE_PROC(bus),
-		    &bus->attach_msg[0], &bus->attach_msg[1]);
+		    &bus->attach_msg[0], &bus->attach_msg[1]); // (10) start root device attach with usb_bus_attach
 		USB_BUS_UNLOCK(bus);
 
 		/* Do initial explore */

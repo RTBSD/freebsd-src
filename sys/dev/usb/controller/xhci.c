@@ -630,7 +630,7 @@ xhci_init(struct xhci_softc *sc, device_t self, uint8_t dma32)
 	cv_init(&sc->sc_cmd_cv, "CMDQ");
 	sx_init(&sc->sc_cmd_sx, "CMDQ lock");
 
-	sc->sc_config_msg[0].hdr.pm_callback = &xhci_configure_msg;
+	sc->sc_config_msg[0].hdr.pm_callback = &xhci_configure_msg; // (2.1) config msg callback
 	sc->sc_config_msg[0].bus = &sc->sc_bus;
 	sc->sc_config_msg[1].hdr.pm_callback = &xhci_configure_msg;
 	sc->sc_config_msg[1].bus = &sc->sc_bus;
@@ -4001,7 +4001,7 @@ xhci_ep_init(struct usb_device *udev, struct usb_endpoint_descriptor *edesc,
 
 	if (udev->parent_hub == NULL) {
 		/* root HUB has special endpoint handling */
-		return;
+		return; // (15.1) roothub skip this func
 	}
 
 	ep->methods = &xhci_device_generic_methods;
@@ -4105,7 +4105,7 @@ xhci_device_init(struct usb_device *udev)
 
 	/* no init for root HUB */
 	if (udev->parent_hub == NULL)
-		return (0);
+		return (0); // (18.1) roothub skip this func
 
 	XHCI_CMD_LOCK(sc);
 
