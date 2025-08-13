@@ -474,7 +474,7 @@ usbd_do_request_flags(struct usb_device *udev, struct mtx *mtx,
 	 */
 	do_unlock = usbd_ctrl_lock(udev);
 
-	hr_func = usbd_get_hr_func(udev);
+	hr_func = usbd_get_hr_func(udev); // (20.9) for roothub, special hr_func
 
 	if (hr_func != NULL) {
 		DPRINTF("Handle Request function is set\n");
@@ -494,7 +494,7 @@ usbd_do_request_flags(struct usb_device *udev, struct mtx *mtx,
 		/* The root HUB code needs the BUS lock locked */
 
 		USB_BUS_LOCK(udev->bus);
-		err = (hr_func) (udev, req, &desc, &temp);
+		err = (hr_func) (udev, req, &desc, &temp); // (20.10) exec xhci_roothub_exec for roothub
 		USB_BUS_UNLOCK(udev->bus);
 
 		if (err)
@@ -1008,7 +1008,7 @@ usbd_req_get_desc(struct usb_device *udev,
 	req.bmRequestType = UT_READ_DEVICE;
 	req.bRequest = UR_GET_DESCRIPTOR;
 	USETW2(req.wValue, type, index);
-	USETW(req.wIndex, id);
+	USETW(req.wIndex, id); // (20.6) fill the get device desc req
 
 	while (1) {
 		if ((min_len < 2) || (max_len < 2)) {
@@ -1021,14 +1021,14 @@ usbd_req_get_desc(struct usb_device *udev,
 		    desc, 0, NULL, 1000 /* ms */);
 
 		if (err != 0 && err != USB_ERR_TIMEOUT &&
-		    min_len != max_len) {
+		    min_len != max_len) { // (20.7) for roothub device desc min_len == max_len
 			/* clear descriptor data */
 			memset(desc, 0, max_len);
 
 			/* try to read full descriptor length */
 			USETW(req.wLength, max_len);
 
-			err = usbd_do_request_flags(udev, mtx, &req,
+			err = usbd_do_request_flags(udev, mtx, &req, // (20.8) short xfer is ok if we expect diff max_len min_len
 			    desc, USB_SHORT_XFER_OK, NULL, 1000 /* ms */);
 
 			if (err == 0) {
@@ -1050,7 +1050,7 @@ usbd_req_get_desc(struct usb_device *udev,
 			if (!retries) {
 				goto done;
 			}
-			retries--;
+			retries--; // (20.8) continue retry
 
 			usb_pause_mtx(mtx, hz / 5);
 
@@ -1578,16 +1578,16 @@ usbd_req_set_address(struct usb_device *udev, struct mtx *mtx, uint16_t addr)
 	req.bRequest = UR_SET_ADDRESS;
 	USETW(req.wValue, addr);
 	USETW(req.wIndex, 0);
-	USETW(req.wLength, 0);
+	USETW(req.wLength, 0); // (19.1) fill the set_addr req
 
 	err = USB_ERR_INVAL;
 
 	/* check if USB controller handles set address */
-	if (udev->bus->methods->set_address != NULL)
+	if (udev->bus->methods->set_address != NULL) // (19.2) call xhci_set_address
 		err = (udev->bus->methods->set_address) (udev, mtx, addr);
 
 	if (err != USB_ERR_INVAL)
-		goto done;
+		goto done; // (19.4) roothub will skip from here
 
 	/* Setting the address should not take more than 1 second ! */
 	err = usbd_do_request_flags(udev, mtx, &req, NULL,
@@ -1980,19 +1980,19 @@ usbd_setup_device_desc(struct usb_device *udev, struct mtx *mtx)
 	 * contains the maximum packet size to use on control endpoint
 	 * 0. If this value is different from "USB_MAX_IPACKET" a new
 	 * USB control request will be setup!
-	 */
+	 */ // (20.1) first get the head 8 bytes of device desc to check the total desc length
 	switch (udev->speed) {
 	case USB_SPEED_FULL:
 		if (usb_full_ddesc != 0) {
 			/* get full device descriptor */
 			err = usbd_req_get_device_desc(udev, mtx, &udev->ddesc);
-			if (err == 0)
-				break;
+			if (err == 0) // (20.2) simply just get the whole device desc
+				break; // and return
 		}
 
 		/* get partial device descriptor, some devices crash on this */
 		err = usbd_req_get_desc(udev, mtx, NULL, &udev->ddesc,
-		    USB_MAX_IPACKET, USB_MAX_IPACKET, 0, UDESC_DEVICE, 0, 0);
+		    USB_MAX_IPACKET, USB_MAX_IPACKET, 0, UDESC_DEVICE, 0, 0); // (20.3) get the first 8 bytes
 		if (err != 0) {
 			DPRINTF("Trying fallback for getting the USB device descriptor\n");
 			/* try 8 bytes bMaxPacketSize */
@@ -2010,7 +2010,7 @@ usbd_setup_device_desc(struct usb_device *udev, struct mtx *mtx)
 			/* try 32/64 bytes bMaxPacketSize */
 			udev->ddesc.bMaxPacketSize = 32;
 		}
-		/* get the full device descriptor */
+		/* get the full device descriptor */ // (20.4) finally get the whole desc
 		err = usbd_req_get_device_desc(udev, mtx, &udev->ddesc);
 		break;
 
@@ -2043,7 +2043,7 @@ usbd_setup_device_desc(struct usb_device *udev, struct mtx *mtx)
 	    udev->ddesc.bDeviceProtocol,
 	    udev->ddesc.bMaxPacketSize,
 	    udev->ddesc.bLength,
-	    udev->speed);
+	    udev->speed); // (20.5) dump the info of device desc
 
 	return (err);
 }

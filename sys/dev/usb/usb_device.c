@@ -683,7 +683,7 @@ usbd_set_config_index(struct usb_device *udev, uint8_t index)
 	/* Prevent re-enumeration */
 	do_unlock = usbd_enum_lock(udev);
 
-	usb_unconfigure(udev, 0);
+	usb_unconfigure(udev, 0); // (24.1) defconfig
 
 	if (index == USB_UNCONFIG_INDEX) {
 		/*
@@ -704,7 +704,7 @@ usbd_set_config_index(struct usb_device *udev, uint8_t index)
 	} else {
 		/* normal request */
 		err = usbd_req_get_config_desc_full(udev,
-		    NULL, &cdp, index);
+		    NULL, &cdp, index); // (24.2) get full config desc
 	}
 	if (err) {
 		goto done;
@@ -727,7 +727,7 @@ usbd_set_config_index(struct usb_device *udev, uint8_t index)
 				    "device status: %s\n",
 				    usbd_errstr(err));
 			} else if (UGETW(ds.wStatus) & UDS_SELF_POWERED) {
-				selfpowered = 1;
+				selfpowered = 1; // (24.3) is device self-powered or bus-powered
 			}
 			DPRINTF("status=0x%04x \n",
 				UGETW(ds.wStatus));
@@ -764,12 +764,12 @@ usbd_set_config_index(struct usb_device *udev, uint8_t index)
 	usb_set_device_state(udev, USB_STATE_CONFIGURED);
 
 	/* Set the actual configuration value. */
-	err = usbd_req_set_config(udev, NULL, cdp->bConfigurationValue);
+	err = usbd_req_set_config(udev, NULL, cdp->bConfigurationValue); // (24.4) select config
 	if (err) {
 		goto done;
 	}
 
-	err = usb_config_parse(udev, USB_IFACE_INDEX_ANY, USB_CFG_ALLOC);
+	err = usb_config_parse(udev, USB_IFACE_INDEX_ANY, USB_CFG_ALLOC); // (27) parse config desc to get intf desc
 	if (err) {
 		goto done;
 	}
@@ -1691,7 +1691,7 @@ usb_get_langid(struct usb_device *udev)
 	} else if (udev->ddesc.iManufacturer ||
 	    udev->ddesc.iProduct ||
 	    udev->ddesc.iSerialNumber) {
-		/* read out the language ID string */
+		/* read out the language ID string */ // (23.1) get string desc
 		err = usbd_req_get_string_desc(udev, NULL,
 		    (char *)scratch_ptr, 4, 0, USB_LANGUAGE_TABLE);
 	} else {
@@ -1729,7 +1729,7 @@ usb_get_langid(struct usb_device *udev)
 		}
 
 		DPRINTFN(1, "Language selected: 0x%04x\n", langid);
-		udev->langid = langid;
+		udev->langid = langid; // (23.2) get lang id
 	}
 
 	if (do_unlock)
@@ -1978,7 +1978,7 @@ usb_alloc_device(device_t parent_dev, struct usb_bus *bus,
 	/* assume 100mA bus powered for now. Changed when configured. */
 	udev->power = USB_MIN_POWER;
 	/* fetch the vendor and product strings from the device */
-	usb_set_device_strings(udev);
+	usb_set_device_strings(udev); // (23.4) parse string desc
 
 	if (udev->flags.usb_mode == USB_MODE_DEVICE) {
 		/* USB device mode setup is complete */
@@ -2016,7 +2016,7 @@ repeat_set_config:
 	DPRINTF("setting config %u\n", config_index);
 
 	/* get the USB device configured */
-	err = usbd_set_config_index(udev, config_index); // (23) get config desc and select one config for this device
+	err = usbd_set_config_index(udev, config_index); // (24) get config desc and select one config for this device
 	if (err) {
 		if (udev->ddesc.bNumConfigurations != 0) {
 			if (!set_config_failed) {
@@ -2084,9 +2084,9 @@ repeat_set_config:
 
 config_done:
 	DPRINTF("new dev (addr %d), udev=%p, parent_hub=%p\n",
-	    udev->address, udev, udev->parent_hub); // (24) ok, new device is ready
+	    udev->address, udev, udev->parent_hub); // (25) ok, new device is ready
 
-	/* register our device - we are ready */
+	/* register our device - we are ready */ // (26) bind usb port with device
 	usb_bus_port_set_device(bus, parent_hub ?
 	    parent_hub->hub->ports + port_index : NULL, udev, device_index);
 
@@ -2887,7 +2887,7 @@ usb_set_device_state(struct usb_device *udev, enum usb_dev_state state)
 	mtx_unlock(&usb_ref_lock);
 #endif
 	if (udev->bus->methods->device_state_change != NULL)
-		(udev->bus->methods->device_state_change) (udev);
+		(udev->bus->methods->device_state_change) (udev); // (18.1) call xhci_device_state_change
 }
 
 enum usb_dev_state

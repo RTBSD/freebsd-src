@@ -766,7 +766,7 @@ usb_bus_attach(struct usb_proc_msg *pm) // (10) usb_process pass to here
 	    speed, USB_MODE_HOST); // (12) allocate and init roothub device
 	if (child) {
 		err = usb_probe_and_attach(child,
-		    USB_IFACE_INDEX_ANY);
+		    USB_IFACE_INDEX_ANY); // (28) roothub device is of hub type
 		if (!err) {
 			if ((bus->devices[USB_ROOT_HUB_ADDR] == NULL) ||
 			    (bus->devices[USB_ROOT_HUB_ADDR]->hub == NULL)) {

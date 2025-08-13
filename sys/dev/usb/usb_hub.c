@@ -1119,7 +1119,7 @@ uhub_explore(struct usb_device *udev)
 }
 
 int
-uhub_probe(device_t dev)
+uhub_probe(device_t dev) // (29) probe roothub
 {
 	struct usb_attach_arg *uaa = device_get_ivars(dev);
 
@@ -1199,7 +1199,7 @@ uhub_query_info(struct usb_device *udev, uint8_t *pnports, uint8_t *ptt)
 }
 
 int
-uhub_attach(device_t dev)
+uhub_attach(device_t dev) // (30) attach roothub
 {
 	struct uhub_softc *sc = device_get_softc(dev);
 	struct usb_attach_arg *uaa = device_get_ivars(dev);
@@ -1304,7 +1304,7 @@ uhub_attach(device_t dev)
 	case USB_SPEED_SUPER:
 		if (udev->parent_hub != NULL) {
 			err = usbd_req_set_hub_depth(udev, NULL,
-			    udev->depth - 1);
+			    udev->depth - 1); // (31) set hub depth
 			if (err) {
 				DPRINTFN(0, "Setting USB 3.0 HUB depth failed,"
 				    "error=%s\n", usbd_errstr(err));
@@ -1312,7 +1312,7 @@ uhub_attach(device_t dev)
 			}
 		}
 		err = usbd_req_get_ss_hub_descriptor(udev, NULL, &hubdesc30, 1);
-		if (err) {
+		if (err) { // (32) get super speed hub desc
 			DPRINTFN(0, "Getting USB 3.0 HUB descriptor failed,"
 			    "error=%s\n", usbd_errstr(err));
 			goto error;
@@ -1371,7 +1371,7 @@ uhub_attach(device_t dev)
 #else
 	hub = &sc->sc_hub;
 #endif
-	udev->hub = hub;
+	udev->hub = hub; // (33) this usb device is a hub
 
 	/* initialize HUB structure */
 	hub->hubsoftc = sc;
@@ -1456,7 +1456,7 @@ uhub_attach(device_t dev)
 
 	removable = 0;
 
-	for (x = 0; x != nports; x++) {
+	for (x = 0; x != nports; x++) { // (34) setup each hub ports 
 		/* set up data structures */
 		struct usb_port *up = hub->ports + x;
 
@@ -1495,7 +1495,7 @@ uhub_attach(device_t dev)
 				/* turn the power on */
 				DPRINTFN(2, "Turning port %d power on\n", portno);
 				err = usbd_req_set_port_feature(udev, NULL,
-				    portno, UHF_PORT_POWER);
+				    portno, UHF_PORT_POWER); // (35) set power of each port
 #if USB_HAVE_DISABLE_ENUM
 			}
 #endif
@@ -1518,12 +1518,12 @@ uhub_attach(device_t dev)
 	/* Start the interrupt endpoint, if any */
 
 	USB_MTX_LOCK(&sc->sc_mtx);
-	usbd_transfer_start(sc->sc_xfer[UHUB_INTR_TRANSFER]);
+	usbd_transfer_start(sc->sc_xfer[UHUB_INTR_TRANSFER]); // (37) start hub intr transfer, so that device attached on this hub can enum
 	USB_MTX_UNLOCK(&sc->sc_mtx);
 
 	/* Enable automatic power save on all USB HUBs */
 
-	usbd_set_power_mode(udev, USB_POWER_MODE_SAVE);
+	usbd_set_power_mode(udev, USB_POWER_MODE_SAVE); // (36) set as power save
 
 	return (0);
 

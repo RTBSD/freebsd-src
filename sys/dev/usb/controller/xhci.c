@@ -1353,7 +1353,7 @@ xhci_set_address(struct usb_device *udev, struct mtx *mtx, uint16_t address)
 
 	/* the root HUB case is not handled here */
 	if (udev->parent_hub == NULL)
-		return (USB_ERR_INVAL);
+		return (USB_ERR_INVAL); // (19.3) roothub do not need to assign adress
 
 	index = udev->controller_slot_id;
 
@@ -4273,7 +4273,7 @@ xhci_device_state_change(struct usb_device *udev)
 
 	/* check for root HUB */
 	if (udev->parent_hub == NULL)
-		return;
+		return; // (18.2) roothub skip this func
 
 	index = udev->controller_slot_id;
 
