@@ -480,7 +480,7 @@ struct xhci_bos_desc {
 union xhci_hub_desc {
 	struct usb_status		stat;
 	struct usb_port_status		ps;
-	struct usb_hub_ss_descriptor	hubd;
+	struct usb_hub_ss_descriptor	hubd; // (0) for xhci, root hub uses ss desc
 	uint8_t				temp[128];
 };
 

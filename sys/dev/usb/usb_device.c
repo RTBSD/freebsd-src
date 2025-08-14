@@ -1454,7 +1454,7 @@ usb_init_attach_arg(struct usb_device *udev,
  *------------------------------------------------------------------------*/
 usb_error_t
 usb_probe_and_attach(struct usb_device *udev, uint8_t iface_index)
-{
+{ // (45) real device enum work
 	struct usb_attach_arg uaa;
 	struct usb_interface *iface;
 	uint8_t i;

@@ -104,7 +104,7 @@ struct usb_bus {
 	struct usb_dma_tag dma_tags[USB_BUS_DMA_TAG_MAX];
 #endif
 	const struct usb_bus_methods *methods;	/* filled by HC driver */
-	struct usb_device **devices;
+	struct usb_device **devices; // (0) devices[0] is null, roothub = devices[1]
 
 	struct ifnet *ifp;	/* only for USB Packet Filter */
 

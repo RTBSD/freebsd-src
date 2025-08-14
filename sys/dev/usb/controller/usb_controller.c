@@ -359,13 +359,13 @@ usb_shutdown(device_t dev)
  * This function is used to explore the device tree from the root.
  *------------------------------------------------------------------------*/
 static void
-usb_bus_explore(struct usb_proc_msg *pm)
+usb_bus_explore(struct usb_proc_msg *pm) // (41) start explore usb device from roothub
 {
 	struct usb_bus *bus;
 	struct usb_device *udev;
 
 	bus = ((struct usb_bus_msg *)pm)->bus;
-	udev = bus->devices[USB_ROOT_HUB_ADDR];
+	udev = bus->devices[USB_ROOT_HUB_ADDR]; // (41) get roothub device
 
 	if (bus->no_explore != 0)
 		return;
@@ -379,7 +379,7 @@ usb_bus_explore(struct usb_proc_msg *pm)
 	if (udev != NULL && udev->hub != NULL) {
 		if (bus->do_probe) {
 			bus->do_probe = 0;
-			bus->driver_added_refcount++;
+			bus->driver_added_refcount++; // (42) trace times of probe
 		}
 		if (bus->driver_added_refcount == 0) {
 			/* avoid zero, hence that is memory default */
@@ -403,17 +403,17 @@ usb_bus_explore(struct usb_proc_msg *pm)
 		/*
 		 * First update the USB power state!
 		 */
-		usb_bus_powerd(bus);
+		usb_bus_powerd(bus); // (43) set bus power
 #endif
 		 /* Explore the Root USB HUB. */
-		(udev->hub->explore) (udev);
+		(udev->hub->explore) (udev); // (44) call uhub_explore to do the real explore
 		USB_BUS_LOCK(bus);
 	}
 #if USB_HAVE_ROOT_MOUNT_HOLD
 	usb_root_mount_rel(bus);
 #endif
 
-	/* Nice the enumeration a bit, to avoid looping too fast. */
+	/* Nice the enumeration a bit, to avoid looping too fast. */ // (44) hold the mtx and wait a while before enum device
 	usb_pause_mtx(&bus->bus_mtx, USB_MS_TO_TICKS(usb_enum_nice_time));
 }
 
@@ -685,7 +685,7 @@ usb_power_wdog(void *arg)
 #if USB_HAVE_POWERD
 	USB_BUS_UNLOCK(bus);
 
-	usb_bus_power_update(bus);
+	usb_bus_power_update(bus); // (40) after roothub attach done, start explore bus here
 
 	USB_BUS_LOCK(bus);
 #endif
@@ -887,7 +887,7 @@ usb_attach_sub(device_t dev, struct usb_bus *bus)
 		USB_BUS_UNLOCK(bus);
 
 		/* Do initial explore */
-		usb_needs_explore(bus, 1);
+		usb_needs_explore(bus, 1); // (39), after roothub setup, start explore
 	}
 }
 SYSUNINIT(usb_bus_unload, SI_SUB_KLD, SI_ORDER_ANY, usb_bus_unload, NULL);

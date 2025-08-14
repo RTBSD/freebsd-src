@@ -421,7 +421,7 @@ uhub_explore_handle_re_enumerate(struct usb_device *child)
 		return;
 
 	do_unlock = usbd_enum_lock(child);
-	switch (child->re_enumerate_wait) {
+	switch (child->re_enumerate_wait) { // (x) new device is USB_RE_ENUM_DONE
 	case USB_RE_ENUM_START:
 		err = usbd_set_config_index(child,
 		    USB_UNCONFIG_INDEX);
@@ -518,20 +518,20 @@ uhub_explore_sub(struct uhub_softc *sc, struct usb_port *up)
 	refcount = bus->driver_added_refcount;
 
 	/* get device assosiated with the given port */
-	child = usb_bus_port_get_device(bus, up);
+	child = usb_bus_port_get_device(bus, up); // (44.5) get the new usb device we create when re-attach port
 	if (child == NULL) {
 		/* nothing to do */
 		goto done;
 	}
 
-	uhub_explore_handle_re_enumerate(child);
+	uhub_explore_handle_re_enumerate(child); // (44.6) re enum this new device
 
 	/* check if probe and attach should be done */
 
 	if (child->driver_added_refcount != refcount) {
 		child->driver_added_refcount = refcount;
 		err = usb_probe_and_attach(child,
-		    USB_IFACE_INDEX_ANY);
+		    USB_IFACE_INDEX_ANY); // (44.7) probe and attach for specific usb device
 		if (err) {
 			goto done;
 		}
@@ -618,14 +618,14 @@ repeat:
 	/* first clear the port connection change bit */
 
 	err = usbd_req_clear_port_feature(udev, NULL,
-	    portno, UHF_C_PORT_CONNECTION);
+	    portno, UHF_C_PORT_CONNECTION); // (44.3) clear port change status
 
 	if (err)
 		goto error;
 
 	/* check if there is a child */
 
-	if (child != NULL) {
+	if (child != NULL) { // (44.3) delete the old device
 		/*
 		 * Free USB device and all subdevices, if any.
 		 */
@@ -781,7 +781,7 @@ repeat:
 	}
 	if (speed == USB_SPEED_SUPER) {
 		err = usbd_req_set_hub_u1_timeout(udev, NULL,
-		    portno, 128 - (2 * udev->depth));
+		    portno, 128 - (2 * udev->depth)); // (44.3) set u1 and u2 timeout
 		if (err) {
 			DPRINTFN(0, "port %d U1 timeout "
 			    "failed, error=%s\n",
@@ -809,7 +809,7 @@ repeat:
 	else
 		mode = USB_MODE_HOST;
 
-	/* need to create a new child */
+	/* need to create a new child */ // (44.3) allocate a new device
 	child = usb_alloc_device(sc->sc_dev, udev->bus, udev,
 	    udev->depth + 1, portno - 1, portno, speed, mode);
 	if (child == NULL) {
@@ -1000,7 +1000,7 @@ uhub_explore(struct usb_device *udev)
 	uint8_t x;
 	uint8_t do_unlock;
 
-	hub = udev->hub;
+	hub = udev->hub; // (44.1) the udev to explore must be some kind of hubs, roothub or hub device
 	sc = hub->hubsoftc;
 
 	DPRINTFN(11, "udev=%p addr=%d\n", udev, udev->address);
@@ -1019,7 +1019,7 @@ uhub_explore(struct usb_device *udev)
 	/*
 	 * Make sure we don't race against user-space applications
 	 * like LibUSB:
-	 */
+	 */ // (44.2) make sure there are only one process handling enum on the whole usb bus
 	do_unlock = usbd_enum_lock(udev);
 
 	/*
@@ -1028,7 +1028,7 @@ uhub_explore(struct usb_device *udev)
 	 */
 	retval = USB_ERR_NORMAL_COMPLETION;
 
-	for (x = 0; x != hub->nports; x++) {
+	for (x = 0; x != hub->nports; x++) { // (44.3) foreach hub ports
 		up = hub->ports + x;
 		portno = x + 1;
 
@@ -1043,7 +1043,7 @@ uhub_explore(struct usb_device *udev)
 			if (err != USB_ERR_NORMAL_COMPLETION)
 				retval = err;
 		}
-		if (!(sc->sc_flags & UHUB_FLAG_DID_EXPLORE)) {
+		if (!(sc->sc_flags & UHUB_FLAG_DID_EXPLORE)) { // (x) port change status should be reported
 			/*
 			 * Fake a connect status change so that the
 			 * status gets checked initially!
@@ -1077,7 +1077,7 @@ uhub_explore(struct usb_device *udev)
 			}
 		}
 		if (sc->sc_st.port_change & UPS_C_CONNECT_STATUS) {
-			err = uhub_reattach_port(sc, portno);
+			err = uhub_reattach_port(sc, portno); // (44.3) port change happend
 			if (err != USB_ERR_NORMAL_COMPLETION)
 				retval = err;
 		}
@@ -1103,7 +1103,7 @@ uhub_explore(struct usb_device *udev)
 				retval = err;
 		}
 
-		if (uhub_explore_sub(sc, up) == USB_ERR_NORMAL_COMPLETION) {
+		if (uhub_explore_sub(sc, up) == USB_ERR_NORMAL_COMPLETION) { // (44.4) real explore work
 			/* explore succeeded - reset restart counter */
 			up->restartcnt = 0;
 		}
@@ -1317,7 +1317,7 @@ uhub_attach(device_t dev) // (30) attach roothub
 			    "error=%s\n", usbd_errstr(err));
 			goto error;
 		}
-		/* get number of ports */
+		/* get number of ports */ // (32) roothub has some ports
 		nports = hubdesc30.bNbrPorts;
 
 		/* get power delay */
@@ -1325,7 +1325,7 @@ uhub_attach(device_t dev) // (30) attach roothub
 		    usb_extra_power_up_time);
 
 		/* get complete HUB descriptor */
-		if (nports >= 8) {
+		if (nports >= 8) { // (32) if hub has 8 ports, one byte is not enough to represent all ports, there may be more ports
 			/* check number of ports */
 			if (nports > ((udev->parent_hub != NULL) ? 15 : 127)) {
 				DPRINTFN(0, "Invalid number of USB 3.0 ports,"
@@ -1517,7 +1517,7 @@ uhub_attach(device_t dev) // (30) attach roothub
 
 	/* Start the interrupt endpoint, if any */
 
-	USB_MTX_LOCK(&sc->sc_mtx);
+	USB_MTX_LOCK(&sc->sc_mtx); // (37) for roothub, sc_xfer is NULL
 	usbd_transfer_start(sc->sc_xfer[UHUB_INTR_TRANSFER]); // (37) start hub intr transfer, so that device attached on this hub can enum
 	USB_MTX_UNLOCK(&sc->sc_mtx);
 
@@ -2292,7 +2292,7 @@ usb_needs_explore(struct usb_bus *bus, uint8_t do_probe)
 	}
 	if (do_probe) {
 		bus->do_probe = 1;
-	}
+	} // (40) put usb_bus_explore into usb_process
 	if (usb_proc_msignal(USB_BUS_EXPLORE_PROC(bus),
 	    &bus->explore_msg[0], &bus->explore_msg[1])) {
 		/* ignore */
@@ -2591,7 +2591,7 @@ usb_bus_powerd(struct usb_bus *bus)
 
 	if (bus->methods->set_hw_power != NULL) {
 		/* always update hardware power! */
-		(bus->methods->set_hw_power) (bus);
+		(bus->methods->set_hw_power) (bus); // (43.4) call xhci_set_hw_power, null work
 	}
 	return;
 }
