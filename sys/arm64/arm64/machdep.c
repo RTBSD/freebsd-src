@@ -869,7 +869,7 @@ memory_mapping_mode(vm_paddr_t pa)
 }
 
 void
-initarm(struct arm64_bootparams *abp)
+initarm(struct arm64_bootparams *abp) // (0) aarch64 machdep init
 {
 	struct efi_fb *efifb;
 	struct pcpu *pcpup;
@@ -1010,10 +1010,10 @@ initarm(struct arm64_bootparams *abp)
 	mutex_init();
 	init_param2(physmem);
 
-	dbg_init();
-	kdb_init();
+	dbg_init(); // (2) dbg monitor init
+	kdb_init(); // (5) init and select kerenl dbg interface
 #ifdef KDB
-	if ((boothowto & RB_KDB) != 0)
+	if ((boothowto & RB_KDB) != 0) // (13) insert a compile time brk
 		kdb_enter(KDB_WHY_BOOTFLAGS, "Boot flags requested debugger");
 #endif
 	pan_enable();
@@ -1060,11 +1060,11 @@ void
 dbg_init(void)
 {
 
-	/* Clear OS lock */
+	/* Clear OS lock */ // (3) chang OSLSR_EL1 by OSLAR_EL1 for OSLK status
 	WRITE_SPECIALREG(oslar_el1, 0);
 
 	/* This permits DDB to use debug registers for watchpoints. */
-	dbg_monitor_init();
+	dbg_monitor_init(); // (4) init dgb monitor
 
 	/* TODO: Eventually will need to initialize debug registers here. */
 }

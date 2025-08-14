@@ -65,17 +65,17 @@ bool gdb_return_to_ddb = false;
 #endif
 
 static int
-gdb_init(void)
+gdb_init(void) // (8) init GDB as KDB_BACKEND
 {
 	struct gdb_dbgport *dp, **iter;
 	int cur_pri, pri;
 
 	gdb_cur = NULL;
 	cur_pri = -1;
-	SET_FOREACH(iter, gdb_dbgport_set) {
+	SET_FOREACH(iter, gdb_dbgport_set) { // (9) foreach probe GDB_DBGPORT uart/usb/net/..
 		dp = *iter;
 		pri = (dp->gdb_probe != NULL) ? dp->gdb_probe() : -1;
-		dp->gdb_active = (pri >= 0) ? 0 : -1;
+		dp->gdb_active = (pri >= 0) ? 0 : -1; // (10) probe each GDB_DBGPORT (e.g. uart_dbg_probe), 0 if port device exists
 		if (pri > cur_pri) {
 			cur_pri = pri;
 			gdb_cur = dp;
@@ -92,12 +92,12 @@ gdb_init(void)
 	} else
 		printf("GDB: no debug ports present\n");
 	if (gdb_cur != NULL) {
-		gdb_cur->gdb_init();
+		gdb_cur->gdb_init(); // (11) init GDB_DBGPORT (e.g. uart_dbg_init) device
 		printf("GDB: current port: %s\n", gdb_cur->gdb_name);
 	}
 	if (gdb_cur != NULL) {
 		cur_pri = (boothowto & RB_GDB) ? 2 : 0;
-		gdb_consinit();
+		gdb_consinit(); // (12) init gdb console
 	} else
 		cur_pri = -1;
 	return (cur_pri);
@@ -181,19 +181,19 @@ enum {
 	GDB_VCONT_SUPPORTED,
 	GDB_QTHREADEVENTS,
 	GDB_NO_RESUMED,
-};
-static const char * const gdb_feature_names[] = {
-	[GDB_MULTIPROCESS] = "multiprocess",
-	[GDB_SWBREAK] = "swbreak",
-	[GDB_HWBREAK] = "hwbreak",
-	[GDB_QRELOCINSN] = "qRelocInsn",
-	[GDB_FORK_EVENTS] = "fork-events",
+}; // (35) check https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html
+static const char * const gdb_feature_names[] = { // (35) which GDB client would ask and we supported
+	[GDB_MULTIPROCESS] = "multiprocess", // (35) GDB supports multiprocess extensions to the remote protocol.
+	[GDB_SWBREAK] = "swbreak", // (35) GDB supports the swbreak stop reason in stop replies
+	[GDB_HWBREAK] = "hwbreak", // (35) GDB supports the hwbreak stop reason in stop replies
+	[GDB_QRELOCINSN] = "qRelocInsn", // (35) Relocate instruction reply packet.
+	[GDB_FORK_EVENTS] = "fork-events", // (35) GDB supports fork event extensions to the remote protocol.
 	[GDB_VFORK_EVENTS] = "vfork-events",
-	[GDB_EXEC_EVENTS] = "exec-events",
-	[GDB_VCONT_SUPPORTED] = "vContSupported",
+	[GDB_EXEC_EVENTS] = "exec-events", // (35) GDB supports exec event extensions to the remote protocol. 
+	[GDB_VCONT_SUPPORTED] = "vContSupported", // (35) supported actions in the reply to ‘vCont?’ 
 	[GDB_QTHREADEVENTS] = "QThreadEvents",
 	[GDB_NO_RESUMED] = "no-resumed",
-};
+}; // (35) check https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html#qSupported
 static void
 gdb_do_qsupported(uint32_t *feat)
 {
@@ -243,7 +243,7 @@ gdb_do_qsupported(uint32_t *feat)
 		tok[toklen - 1] = '\0';
 
 		for (i = 0; i < nitems(gdb_feature_names); i++)
-			if (strcmp(gdb_feature_names[i], tok) == 0)
+			if (strcmp(gdb_feature_names[i], tok) == 0) // (35) yes, this feature is supported
 				break;
 
 		if (i == nitems(gdb_feature_names)) {
@@ -711,14 +711,14 @@ fail:
 }
 
 static int
-gdb_trap(int type, int code)
+gdb_trap(int type, int code) // (31) debug exception real work
 {
 	jmp_buf jb;
 	struct thread *thr_iter;
 	void *prev_jb;
 	uint32_t host_features;
 
-	prev_jb = kdb_jmpbuf(jb);
+	prev_jb = kdb_jmpbuf(jb); // (32) save jmpbuf, if later we access invalid memory we can jmp back to safe position
 	if (setjmp(jb) != 0) {
 		printf("%s bailing, hopefully back to ddb!\n", __func__);
 		gdb_listening = 0;
@@ -729,18 +729,18 @@ gdb_trap(int type, int code)
 	gdb_listening = 0;
 	gdb_ackmode = true;
 
-	/*
+	/* // (33) check GDB packet from https://sourceware.org/gdb/current/onlinedocs/gdb.html/Packets.html
 	 * Send a T packet. We currently do not support watchpoints (the
 	 * awatch, rwatch or watch elements).
-	 */
-	gdb_tx_begin('T');
+	 */ // (33) send stop reason to GDB client
+	gdb_tx_begin('T'); // (33) T05
 	gdb_tx_hex(gdb_cpu_signal(type, code), 2);
 	gdb_tx_varhex(GDB_REG_PC);
 	gdb_tx_char(':');
 	gdb_tx_reg(GDB_REG_PC);
 	gdb_tx_char(';');
 	gdb_cpu_stop_reason(type, code);
-	gdb_tx_str("thread:");
+	gdb_tx_str("thread:"); // (33) some thread id
 	gdb_tx_varhex((uintmax_t)kdb_thread->td_tid);
 	gdb_tx_char(';');
 	gdb_tx_end();			/* XXX check error condition. */
@@ -810,7 +810,7 @@ gdb_trap(int type, int code)
 				gdb_tx_ok();
 			break;
 		}
-		case 'H': {	/* Set thread. */
+		case 'H': {	/* Set thread. */ // (35) set thread for later continue
 			intmax_t tid;
 			struct thread *thr;
 
@@ -886,13 +886,13 @@ gdb_trap(int type, int code)
 			gdb_tx_ok();
 			break;
 		}
-		case 'q':	/* General query. */
+		case 'q':	/* General query. */ // (34) GDB client would first query from something
 			if (gdb_rx_equal("C")) {
 				gdb_tx_begin('Q');
 				gdb_tx_char('C');
 				gdb_tx_varhex((long)kdb_thread->td_tid);
 				gdb_tx_end();
-			} else if (gdb_rx_equal("Supported")) {
+			} else if (gdb_rx_equal("Supported")) { // (34) supported featrue by this GDB server
 				gdb_do_qsupported(&host_features);
 			} else if (gdb_rx_equal("fThreadInfo")) {
 				thr_iter = kdb_thr_first();
@@ -972,7 +972,7 @@ gdb_trap(int type, int code)
 		case EOF:
 			/* Empty command. Treat as unknown command. */
 			/* FALLTHROUGH */
-		default:
+		default: // (35) vMustReplyEmpty, replay to 'v' packet with empty string, use to check how gdbserver handles unknown packets
 			/* Unknown command. Send empty response. */
 			gdb_tx_empty();
 			break;

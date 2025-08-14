@@ -504,9 +504,9 @@ do_el1h_sync(struct thread *td, struct trapframe *frame)
 	case EXCP_BRKPT_EL1:
 	case EXCP_WATCHPT_EL1:
 	case EXCP_SOFTSTP_EL1:
-		break;
+		break; // (22) avoid nest debug
 	default:
-		dbg_enable();
+		dbg_enable(); // (22) enable debug exception if ec cause is not debug
 		break;
 	}
 
@@ -539,7 +539,7 @@ do_el1h_sync(struct thread *td, struct trapframe *frame)
 			    "data", dfsc);
 		}
 		break;
-	case EXCP_BRK:
+	case EXCP_BRK: // (23) ec cause is brk
 #ifdef KDTRACE_HOOKS
 		if ((esr & ESR_ELx_ISS_MASK) == 0x40d /* BRK_IMM16_VAL */ &&
 		    dtrace_invop_jump_addr != NULL &&
@@ -547,14 +547,14 @@ do_el1h_sync(struct thread *td, struct trapframe *frame)
 			break;
 #endif
 #ifdef KDB
-		kdb_trap(exception, 0, frame);
+		kdb_trap(exception, 0, frame); // (24) kdb trap real work
 #else
 		panic("No debugger in kernel.");
 #endif
 		break;
-	case EXCP_BRKPT_EL1:
-	case EXCP_WATCHPT_EL1:
-	case EXCP_SOFTSTP_EL1:
+	case EXCP_BRKPT_EL1: // (23) ec cause is hw/sw breakpoint
+	case EXCP_WATCHPT_EL1: // (23) is watchpoint
+	case EXCP_SOFTSTP_EL1: // (23) is debug step
 #ifdef KDB
 		kdb_trap(exception, 0, frame);
 #else

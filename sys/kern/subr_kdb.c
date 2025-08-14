@@ -552,7 +552,7 @@ kdb_enter(const char *why, const char *msg)
 		kdb_why = why;
 		if (msg != NULL)
 			printf("KDB: enter: %s\n", msg);
-		breakpoint();
+		breakpoint(); // (14) brk to trigger debug exception
 		kdb_why = KDB_WHY_UNSET;
 	}
 }
@@ -570,11 +570,11 @@ kdb_init(void)
 	kdb_active = 0;
 	kdb_dbbe = NULL;
 	cur_pri = -1;
-	SET_FOREACH(iter, kdb_dbbe_set) {
+	SET_FOREACH(iter, kdb_dbbe_set) { // (6) foreach init KDB_BACKEND ddb/gdb/null
 		be = *iter;
-		pri = (be->dbbe_init != NULL) ? be->dbbe_init() : -1;
+		pri = (be->dbbe_init != NULL) ? be->dbbe_init() : -1; // (6), e.g. gdb_init
 		be->dbbe_active = (pri >= 0) ? 0 : -1;
-		if (pri > cur_pri) {
+		if (pri > cur_pri) { // (7) select a KDB_BACKEND with priority, e.g. ddb
 			cur_pri = pri;
 			kdb_dbbe = be;
 		}
@@ -737,7 +737,7 @@ kdb_thr_select(struct thread *thr)
  * Enter the debugger due to a trap.
  */
 int
-kdb_trap(int type, int code, struct trapframe *tf)
+kdb_trap(int type, int code, struct trapframe *tf) // (25) kdb trap real work
 {
 #ifdef SMP
 	cpuset_t other_cpus;
@@ -755,39 +755,39 @@ kdb_trap(int type, int code, struct trapframe *tf)
 	if (kdb_active)
 		return (0);
 
-	intr = intr_disable();
+	intr = intr_disable(); // (26) for arm64, is clr I in DAIF to gloablly disable intr
 
 	if (!SCHEDULER_STOPPED()) {
 #ifdef SMP
 		other_cpus = all_cpus;
 		CPU_ANDNOT(&other_cpus, &other_cpus, &stopped_cpus);
 		CPU_CLR(PCPU_GET(cpuid), &other_cpus);
-		stop_cpus_hard(other_cpus);
+		stop_cpus_hard(other_cpus); // (27) for smp, one core enter debug exception, the other cores need also to stop
 #endif
-		curthread->td_stopsched = 1;
+		curthread->td_stopsched = 1; // (27) curthread is also marked as stopped
 		did_stop_cpus = 1;
 	} else
-		did_stop_cpus = 0;
+		did_stop_cpus = 0; // (27) for up, no need to handle, because the only core is trapped in exception
 
 	kdb_active++;
 
-	kdb_frame = tf;
+	kdb_frame = tf; // (28) save the trap frame
 
 	/* Let MD code do its thing first... */
-	kdb_cpu_trap(type, code);
+	kdb_cpu_trap(type, code); // (28) machdep work for kdb trap, for arm64 is null
 
 	makectx(tf, &kdb_pcb);
 	kdb_thr_select(curthread);
 
-	cngrab();
+	cngrab(); // (29) make use of CONSOLE_DRIVER(gdb) as console
 
 	for (;;) {
-		if (!kdb_backend_permitted(be, curthread)) {
+		if (!kdb_backend_permitted(be, curthread)) { // (29) security check
 			/* Unhandled breakpoint traps are fatal. */
 			handled = 1;
 			break;
 		}
-		handled = be->dbbe_trap(type, code);
+		handled = be->dbbe_trap(type, code); // (30) KDB_BACKEND, e.g gdb_trap
 		if (be == kdb_dbbe)
 			break;
 		be = kdb_dbbe;

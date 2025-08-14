@@ -105,14 +105,14 @@ gdb_cpu_setreg(int regnum, void *val)
 
 int
 gdb_cpu_signal(int type, int code __unused)
-{
+{ // (33) check GDB signal in https://sourceware.org/gdb/current/onlinedocs/gdb.html/Signals.html
 
 	switch (type) {
 	case EXCP_WATCHPT_EL1:
 	case EXCP_SOFTSTP_EL1:
 	case EXCP_BRKPT_EL1:
 	case EXCP_BRK:
-		return (SIGTRAP);
+		return (SIGTRAP); // (33) stop reason is 5, tell GDB client we are trapped
 	}
 	return (SIGEMT);
 }

@@ -72,7 +72,7 @@
 
 .macro	save_registers el
 	add	x29, sp, #(TF_SIZE)
-.if \el == 0
+.if \el == 0 // (x)
 #if defined(PERTHREAD_SSP)
 	/* Load the SSP canary to sp_el0 */
 	ldr	x1, [x18, #(PC_CURTHREAD)]
@@ -95,13 +95,13 @@
 
 	/* Unmask debug and SError exceptions */
 	msr	daifclr, #(DAIF_D | DAIF_A)
-.else
+.else // (19) el1
 	/*
 	 * Unmask debug and SError exceptions.
 	 * For EL1, debug exceptions are conditionally unmasked in
 	 * do_el1h_sync().
 	 */
-	msr	daifclr, #(DAIF_A)
+	msr	daifclr, #(DAIF_A) // (20) enable serror
 .endif
 .endm
 
@@ -194,10 +194,10 @@
 .endm
 
 ENTRY(handle_el1h_sync)
-	save_registers 1
+	save_registers 1 // (18) save more context for debug exception, mostly for el0 handling we do not care here
 	ldr	x0, [x18, #PC_CURTHREAD]
 	mov	x1, sp
-	bl	do_el1h_sync
+	bl	do_el1h_sync // (21) real work for el1 exception
 	restore_registers 1
 	ERET
 END(handle_el1h_sync)
@@ -248,12 +248,12 @@ END(handle_empty_exception)
 
 .macro	vector	name, el
 	.align 7
-	save_registers_head \el
-	b	handle_\name
+	save_registers_head \el // (16) save debug context
+	b	handle_\name // (17) e.g handle_el1h_sync
 	dsb	sy
 	isb
 	/* Break instruction to ensure we aren't executing code here. */
-	brk	0x42
+	brk	0x42 // (17) shall not reach here, should eret from line 252
 .endm
 
 .macro	vempty el
@@ -268,7 +268,7 @@ exception_vectors:
 	vempty 1		/* FIQ EL1t */
 	vempty 1		/* Error EL1t */
 
-	vector el1h_sync 1	/* Synchronous EL1h */
+	vector el1h_sync 1	/* Synchronous EL1h */ // (15) debug exception entry
 	vector el1h_irq 1	/* IRQ EL1h */
 	vempty 1		/* FIQ EL1h */
 	vector serror 1		/* Error EL1h */
