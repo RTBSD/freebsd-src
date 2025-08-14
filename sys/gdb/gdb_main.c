@@ -628,7 +628,7 @@ gdb_z_insert(void)
 	char ztype;
 	int error;
 
-	ztype = gdb_rx_char();
+	ztype = gdb_rx_char(); // (43.1) parse ztype, addr and length
 	if (gdb_rx_char() != ',' || gdb_rx_varhex(&addr) ||
 	    gdb_rx_char() != ',' || gdb_rx_varhex(&length)) {
 		error = EINVAL;
@@ -648,9 +648,9 @@ gdb_z_insert(void)
 		error = kdb_cpu_set_watchpoint((vm_offset_t)addr,
 		    (vm_size_t)length, KDB_DBG_ACCESS_RW);
 		break;
-	case '1': /* hardware breakpoint */
+	case '1': /* hardware breakpoint */ // (43.3) TODO, hw breakpoint support
 	case '0': /* software breakpoint */
-		/* Not implemented. */
+		/* Not implemented. */ // (43.2) sw breakpoint actually implmented by GDB client
 		gdb_tx_empty();
 		return;
 	default:
@@ -764,7 +764,7 @@ gdb_trap(int type, int code) // (31) debug exception real work
 				pc = addr;
 				gdb_cpu_setreg(GDB_REG_PC, &pc); // (37) use new pc to continue
 			}
-			kdb_cpu_clear_singlestep();
+			kdb_cpu_clear_singlestep(); // (37) clear SS flag and continue running
 			gdb_listening = 1;
 			return (1);
 		}
@@ -789,7 +789,7 @@ gdb_trap(int type, int code) // (31) debug exception real work
 			size_t r;
 			gdb_tx_begin(0);
 			for (r = 0; r < GDB_NREGS; r++)
-				gdb_tx_reg(r);
+				gdb_tx_reg(r); // (35) get reg one by one from trap frame
 			gdb_tx_end();
 			break;
 		}
@@ -962,11 +962,11 @@ gdb_trap(int type, int code) // (31) debug exception real work
 			break;
 		}
 		case 'z': {	/* Remove watchpoint. */
-			gdb_z_remove();
+			gdb_z_remove(); // (44) remove watchpoint/hw breakpoint
 			break;
 		}
 		case 'Z': {	/* Set watchpoint. */
-			gdb_z_insert();
+			gdb_z_insert(); // (43) insert watchpoint/hw breakpoint
 			break;
 		} // (42) TODO, GDB Ctrl-C https://sourceware.org/gdb/current/onlinedocs/gdb.html/Interrupts.html#interrupting-remote-targets
 		case EOF:

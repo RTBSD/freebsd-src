@@ -187,24 +187,24 @@ dbg_wb_write_reg(int reg, int n, uint64_t val)
 
 #if defined(DDB) || defined(GDB)
 void
-kdb_cpu_set_singlestep(void)
+kdb_cpu_set_singlestep(void) // (40.1) ctrl step running
 {
 
 	KASSERT((READ_SPECIALREG(daif) & PSR_D) == PSR_D,
-	    ("%s: debug exceptions are not masked", __func__));
-
-	kdb_frame->tf_spsr |= PSR_SS;
+	    ("%s: debug exceptions are not masked", __func__)); // (40.1) assert we are trapped in debug exception
+	// (40.1) C5.2.18 SPSR_EL1, Saved Program Status Register (EL1)
+	kdb_frame->tf_spsr |= PSR_SS; // (40.1) SS, bit [21], Software Step. this bit will be wrote back to sys reg
 
 	/*
 	 * TODO: Handle single stepping over instructions that access
 	 * the DAIF values. On a read the value will be incorrect.
 	 */
 	kernel_monitor.dbg_flags &= ~PSR_DAIF;
-	kernel_monitor.dbg_flags |= kdb_frame->tf_spsr & PSR_DAIF;
-	kdb_frame->tf_spsr |= (PSR_A | PSR_I | PSR_F);
+	kernel_monitor.dbg_flags |= kdb_frame->tf_spsr & PSR_DAIF; // (40.1) save DAIF to frame
+	kdb_frame->tf_spsr |= (PSR_A | PSR_I | PSR_F); // (40.1) enable serror and interrupt after we leave trap
 
 	WRITE_SPECIALREG(mdscr_el1, READ_SPECIALREG(mdscr_el1) |
-	    MDSCR_SS | MDSCR_KDE);
+	    MDSCR_SS | MDSCR_KDE); // (40.1) SS, bit [0], software step, KDE, bit [13], kernel debug enabled
 
 	/*
 	 * Disable breakpoints and watchpoints, e.g. stepping
@@ -213,7 +213,7 @@ kdb_cpu_set_singlestep(void)
 	 */
 	if ((kernel_monitor.dbg_flags & DBGMON_ENABLED) != 0) {
 		WRITE_SPECIALREG(mdscr_el1,
-		    READ_SPECIALREG(mdscr_el1) & ~MDSCR_MDE);
+		    READ_SPECIALREG(mdscr_el1) & ~MDSCR_MDE); // (40.1) MDE, bit [15], disable all debug exceptions
 	}
 }
 
@@ -244,10 +244,10 @@ kdb_cpu_clear_singlestep(void)
 
 int
 kdb_cpu_set_watchpoint(vm_offset_t addr, vm_size_t size, int access)
-{
+{ // // (43.4) A watchpoint is an event that results from the execution of an instruction, based on a data address. Watchpoints are also known as data breakpoints.
 	enum dbg_access_t dbg_access;
 
-	switch (access) {
+	switch (access) { // (43.4) Load/store control. LSC, bits [4:3] This field enables watchpoint matching on the type of access being made
 	case KDB_DBG_ACCESS_R:
 		dbg_access = HW_BREAKPOINT_R;
 		break;
@@ -405,14 +405,14 @@ dbg_setup_watchpoint(struct debug_monitor_state *monitor, vm_offset_t addr,
 	if (monitor == NULL)
 		monitor = &kernel_monitor;
 
-	i = dbg_find_free_slot(monitor, DBG_TYPE_WATCHPOINT);
+	i = dbg_find_free_slot(monitor, DBG_TYPE_WATCHPOINT); // (43.4) find a free slot for this watchpoint
 	if (i == -1) {
 		printf("Can not find slot for watchpoint, max %d"
 		    " watchpoints supported\n", dbg_watchpoint_num);
 		return (EBUSY);
 	}
 
-	switch(size) {
+	switch(size) { // (43.5) BAS, bits [12:5], Byte address select.
 	case 1:
 		wcr_size = DBG_WATCH_CTRL_LEN_1;
 		break;
@@ -430,22 +430,22 @@ dbg_setup_watchpoint(struct debug_monitor_state *monitor, vm_offset_t addr,
 		return (EINVAL);
 	}
 
-	if ((monitor->dbg_flags & DBGMON_KERNEL) == 0)
+	if ((monitor->dbg_flags & DBGMON_KERNEL) == 0) // (43.5) PAC, bits [2:1] Privilege of access control.
 		wcr_priv = DBG_WB_CTRL_EL0;
 	else
 		wcr_priv = DBG_WB_CTRL_EL1;
 
 	switch(access) {
-	case HW_BREAKPOINT_X:
+	case HW_BREAKPOINT_X: // (x) not used
 		wcr_access = DBG_WATCH_CTRL_EXEC;
 		break;
 	case HW_BREAKPOINT_R:
-		wcr_access = DBG_WATCH_CTRL_LOAD;
+		wcr_access = DBG_WATCH_CTRL_LOAD; // (43.5) Match instructions that load from a watchpointed address.
 		break;
 	case HW_BREAKPOINT_W:
-		wcr_access = DBG_WATCH_CTRL_STORE;
+		wcr_access = DBG_WATCH_CTRL_STORE; // (43.5) Match instructions that store to a watchpointed address.
 		break;
-	case HW_BREAKPOINT_RW:
+	case HW_BREAKPOINT_RW: // (43.5) Match instructions that load from or store to a watchpointed address
 		wcr_access = DBG_WATCH_CTRL_LOAD | DBG_WATCH_CTRL_STORE;
 		break;
 	default:
@@ -453,12 +453,12 @@ dbg_setup_watchpoint(struct debug_monitor_state *monitor, vm_offset_t addr,
 		return (EINVAL);
 	}
 
-	monitor->dbg_wvr[i] = addr;
-	monitor->dbg_wcr[i] = wcr_size | wcr_access | wcr_priv | DBG_WB_CTRL_E;
+	monitor->dbg_wvr[i] = addr; // (43.5) VA[48:2] address value for comparison
+	monitor->dbg_wcr[i] = wcr_size | wcr_access | wcr_priv | DBG_WB_CTRL_E; // (43.5) E, bit [0] Watchpoint n enabled.
 	monitor->dbg_enable_count++;
 	monitor->dbg_flags |= DBGMON_ENABLED;
 
-	dbg_register_sync(monitor);
+	dbg_register_sync(monitor); // (43.6) write watchpoint to reg
 	return (0);
 }
 
@@ -509,14 +509,14 @@ dbg_register_sync(struct debug_monitor_state *monitor)
 		dbg_wb_write_reg(DBG_REG_BASE_WVR, i,
 		    monitor->dbg_wvr[i]);
 	}
-
+	// (43.7) D19.3.20 MDSCR_EL1, Monitor Debug System Control Register
 	mdscr = READ_SPECIALREG(mdscr_el1);
 	if ((monitor->dbg_flags & DBGMON_ENABLED) == 0) {
 		mdscr &= ~(MDSCR_MDE | MDSCR_KDE);
 	} else {
-		mdscr |= MDSCR_MDE;
+		mdscr |= MDSCR_MDE; // (43.7) MDE, bit [15], 1 = enable breakpoint, watchpoint and vector catch
 		if ((monitor->dbg_flags & DBGMON_KERNEL) == DBGMON_KERNEL)
-			mdscr |= MDSCR_KDE;
+			mdscr |= MDSCR_KDE; // (43.7) KDE, bit [13], 1 = all debug exceptions enabled with el1
 	}
 	WRITE_SPECIALREG(mdscr_el1, mdscr);
 	isb();
@@ -527,11 +527,11 @@ dbg_monitor_init(void)
 {
 	uint64_t aa64dfr0;
 	u_int i;
-
+	// (4.1) D19.2.59 ID_AA64DFR0_EL1, AArch64 Debug Feature Register 0
 	/* Find out many breakpoints and watchpoints we can use */
 	aa64dfr0 = READ_SPECIALREG(id_aa64dfr0_el1);
-	dbg_watchpoint_num = ID_AA64DFR0_WRPs_VAL(aa64dfr0);
-	dbg_breakpoint_num = ID_AA64DFR0_BRPs_VAL(aa64dfr0);
+	dbg_watchpoint_num = ID_AA64DFR0_WRPs_VAL(aa64dfr0); // (4.1) WRPs, bits [23:20], num of watchpoints
+	dbg_breakpoint_num = ID_AA64DFR0_BRPs_VAL(aa64dfr0); // (4.1) BRPs, bits [15:12], num of breakpoints
 
 	if (bootverbose && PCPU_GET(cpuid) == 0) {
 		printf("%d watchpoints and %d breakpoints supported\n",
@@ -561,14 +561,14 @@ dbg_monitor_init(void)
 }
 
 void
-dbg_monitor_enter(struct thread *thread)
+dbg_monitor_enter(struct thread *thread) // (19.1) before handling debug exceptions
 {
 	int i;
 
-	if ((kernel_monitor.dbg_flags & DBGMON_ENABLED) != 0) {
+	if ((kernel_monitor.dbg_flags & DBGMON_ENABLED) != 0) { // (19.1) debug kernel
 		/* Install the kernel version of the registers */
 		dbg_register_sync(&kernel_monitor);
-	} else if ((thread->td_pcb->pcb_dbg_regs.dbg_flags & DBGMON_ENABLED) != 0) {
+	} else if ((thread->td_pcb->pcb_dbg_regs.dbg_flags & DBGMON_ENABLED) != 0) { // (x)
 		/* Disable the user breakpoints until we return to userspace */
 		for (i = 0; i < dbg_watchpoint_num; i++) {
 			dbg_wb_write_reg(DBG_REG_BASE_WCR, i, 0);
@@ -586,7 +586,7 @@ dbg_monitor_enter(struct thread *thread)
 }
 
 void
-dbg_monitor_exit(struct thread *thread, struct trapframe *frame)
+dbg_monitor_exit(struct thread *thread, struct trapframe *frame) // (x) it's for el0 debug handling
 {
 	int i;
 
