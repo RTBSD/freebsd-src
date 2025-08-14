@@ -603,7 +603,7 @@ gdb_handle_detach(void)
 	gdb_listening = 0;
 
 	if (gdb_cur->gdb_dbfeatures & GDB_DBGP_FEAT_WANTTERM)
-		gdb_cur->gdb_term();
+		gdb_cur->gdb_term(); // terminate dbg port, e.g uart_dbg_term
 
 #ifdef DDB
 	if (!gdb_return_to_ddb)
@@ -678,22 +678,22 @@ gdb_z_remove(void)
 	char ztype;
 	int error;
 
-	ztype = gdb_rx_char();
+	ztype = gdb_rx_char(); // (36) parse breakpoint type https://www.zeuthen.desy.de/dv/documentation/unixguide/infohtml/gdb/Packets.html
 	if (gdb_rx_char() != ',' || gdb_rx_varhex(&addr) ||
-	    gdb_rx_char() != ',' || gdb_rx_varhex(&length)) {
+	    gdb_rx_char() != ',' || gdb_rx_varhex(&length)) { // (36) parse breakpoint addr and len
 		error = EINVAL;
 		goto fail;
 	}
 
-	switch (ztype) {
-	case '2': /* write watchpoint */
-	case '3': /* read watchpoint */
-	case '4': /* access (RW) watchpoint */
+	switch (ztype) { // (36) check ztype check https://sourceware.org/gdb/current/onlinedocs/gdb.html/ARM_002dSpecific-Protocol-Details.html#ARM_002dSpecific-Protocol-Details
+	case '2': /* write watchpoint */ // (36) a write watchpoint at addr
+	case '3': /* read watchpoint */ // (36) a read watchpoint at addr
+	case '4': /* access (RW) watchpoint */ // (36) an access watchpoint at addr
 		error = kdb_cpu_clr_watchpoint((vm_offset_t)addr,
 		    (vm_size_t)length);
 		break;
-	case '1': /* hardware breakpoint */
-	case '0': /* software breakpoint */
+	case '1': /* hardware breakpoint */ // (36) hardware breakpoint is implemented using a mechanism that is not dependant on being able to modify the target's memory
+	case '0': /* software breakpoint */ // (36) memory breakpoint, which implmented by replacing the inst at addr
 		/* Not implemented. */
 		gdb_tx_empty();
 		return;
@@ -757,12 +757,12 @@ gdb_trap(int type, int code) // (31) debug exception real work
 			gdb_tx_char(';');
 			gdb_tx_end();
 			break;
-		case 'c': {	/* Continue. */
+		case 'c': {	/* Continue. */ // (37) continue at addr
 			uintmax_t addr;
 			register_t pc;
-			if (!gdb_rx_varhex(&addr)) {
+			if (!gdb_rx_varhex(&addr)) { // (37) parse addr
 				pc = addr;
-				gdb_cpu_setreg(GDB_REG_PC, &pc);
+				gdb_cpu_setreg(GDB_REG_PC, &pc); // (37) use new pc to continue
 			}
 			kdb_cpu_clear_singlestep();
 			gdb_listening = 1;
@@ -780,12 +780,12 @@ gdb_trap(int type, int code) // (31) debug exception real work
 			gdb_listening = 1;
 			return (1);
 		}
-		case 'D': {     /* Detach */
+		case 'D': {     /* Detach */ // (38) detach GDB from the remote system
 			gdb_tx_ok();
 			gdb_handle_detach();
 			return (1);
 		}
-		case 'g': {	/* Read registers. */
+		case 'g': {	/* Read registers. */ // (35) get general reg
 			size_t r;
 			gdb_tx_begin(0);
 			for (r = 0; r < GDB_NREGS; r++)
@@ -817,17 +817,17 @@ gdb_trap(int type, int code) // (31) debug exception real work
 			/* Ignore 'g' (general) or 'c' (continue) flag. */
 			(void) gdb_rx_char();
 
-			if (gdb_rx_varhex(&tid)) {
+			if (gdb_rx_varhex(&tid)) { // (35) parse and get tid to be set
 				gdb_tx_err(EINVAL);
 				break;
 			}
 			if (tid > 0) {
-				thr = kdb_thr_lookup(tid);
+				thr = kdb_thr_lookup(tid); // (35) lookup thread by tid
 				if (thr == NULL) {
 					gdb_tx_err(ENOENT);
 					break;
 				}
-				kdb_thr_select(thr);
+				kdb_thr_select(thr); // (35) set thread by tid
 			}
 			gdb_tx_ok();
 			break;
@@ -835,15 +835,15 @@ gdb_trap(int type, int code) // (31) debug exception real work
 		case 'k':	/* Kill request. */
 			gdb_handle_detach();
 			return (1);
-		case 'm': {	/* Read memory. */
+		case 'm': {	/* Read memory. */ // (35) addressable mem
 			uintmax_t addr, size;
 			if (gdb_rx_varhex(&addr) || gdb_rx_char() != ',' ||
-			    gdb_rx_varhex(&size)) {
+			    gdb_rx_varhex(&size)) { // (35) parse the addr and length to address
 				gdb_tx_err(EINVAL);
 				break;
 			}
 			gdb_tx_begin(0);
-			if (gdb_tx_mem((char *)(uintptr_t)addr, size))
+			if (gdb_tx_mem((char *)(uintptr_t)addr, size)) // (36) put addressed mem in buffer char by char
 				gdb_tx_end();
 			else
 				gdb_tx_err(EIO);
@@ -862,7 +862,7 @@ gdb_trap(int type, int code) // (31) debug exception real work
 				gdb_tx_ok();
 			break;
 		}
-		case 'p': {     /* Read register. */
+		case 'p': {     /* Read register. */ // (39) read value of specific reg
 			uintmax_t reg;
 			if (gdb_rx_varhex(&reg)) {
 				gdb_tx_err(EINVAL);
@@ -926,7 +926,7 @@ gdb_trap(int type, int code) // (31) debug exception real work
 			} else
 				gdb_tx_empty();
 			break;
-		case 's': {	/* Step. */
+		case 's': {	/* Step. */ // (40) step run
 			uintmax_t addr;
 			register_t pc;
 			if (!gdb_rx_varhex(&addr)) {
@@ -949,7 +949,7 @@ gdb_trap(int type, int code) // (31) debug exception real work
 			gdb_listening = 1;
 			return (1);
 		}
-		case 'T': {	/* Thread alive. */
+		case 'T': {	/* Thread alive. */ // (41) Find out if the thread thread-id is alive
 			intmax_t tid;
 			if (gdb_rx_varhex(&tid)) {
 				gdb_tx_err(EINVAL);
@@ -968,7 +968,7 @@ gdb_trap(int type, int code) // (31) debug exception real work
 		case 'Z': {	/* Set watchpoint. */
 			gdb_z_insert();
 			break;
-		}
+		} // (42) TODO, GDB Ctrl-C https://sourceware.org/gdb/current/onlinedocs/gdb.html/Interrupts.html#interrupting-remote-targets
 		case EOF:
 			/* Empty command. Treat as unknown command. */
 			/* FALLTHROUGH */
