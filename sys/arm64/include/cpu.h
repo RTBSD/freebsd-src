@@ -86,6 +86,7 @@
 #define	CPU_IMPL_APPLE		0x61
 #define	CPU_IMPL_INTEL		0x69
 #define	CPU_IMPL_AMPERE		0xC0
+#define CPU_IMPL_FIREFLY    0x70
 
 /* ARM Part numbers */
 #define	CPU_PART_FOUNDATION	0xD00
@@ -149,6 +150,10 @@
 #define CPU_PART_M2_AVALANCHE_PRO 0x035
 #define CPU_PART_M2_BLIZZARD_MAX  0x038
 #define CPU_PART_M2_AVALANCHE_MAX 0x039
+
+/* Firefly */
+#define CPU_PART_FIREFLY_LITTLE   0x303
+#define CPU_PART_FIREFLY_BIG      0x664
 
 #define	CPU_IMPL(midr)	(((midr) >> 24) & 0xff)
 #define	CPU_PART(midr)	(((midr) >> 4) & 0xfff)

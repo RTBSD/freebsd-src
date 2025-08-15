@@ -52,6 +52,7 @@
 static struct uart_class *uart_classes[] = {
 	&uart_ns8250_class,
 	&uart_z8530_class,
+	&uart_pl011_class,
 };
 
 static bus_addr_t
@@ -282,8 +283,10 @@ uart_getenv(int devtype, struct uart_devinfo *di, struct uart_class *class)
 		}
 		if (*spec == '\0')
 			break;
-		if (*spec != ',')
+		if (*spec != ',') {
+			printf("invalid char-%c\n", *spec);
 			goto inval;
+		}
 		spec++;
 	}
 
@@ -291,8 +294,10 @@ uart_getenv(int devtype, struct uart_devinfo *di, struct uart_class *class)
 	 * If we still have an invalid address, the specification must be
 	 * missing an I/O port or memory address. We don't like that.
 	 */
-	if (addr == ~0U)
+	if (addr == ~0U) {
+		printf("invalid addr-0x%lx\n", addr);
 		goto inval;
+	}
 	freeenv(cp);
 
 	/*
@@ -318,9 +323,15 @@ uart_getenv(int devtype, struct uart_devinfo *di, struct uart_class *class)
 	di->ops = uart_getops(class);
 	error = bus_space_map(di->bas.bst, addr, uart_getrange(class), 0,
 	    &di->bas.bsh);
+	printf("%s-success: uart,dt:%s,mm:0x%lx,rs:%d,br:%d,xo:%d,sb:%d,rw:%d\n", 
+		__func__, uart_getname(class), addr, di->bas.regshft, di->baudrate,
+		di->bas.rclk, di->stopbits, di->bas.regiowidth);
 	return (error);
 inval:
 	printf("warning: bad uart specification: %s\n", cp);
+	printf("%s-failed: uart,dt:%s,mm:0x%lx,rs:%d,br:%d,xo:%d,sb:%d,rw:%d\n", 
+		__func__, uart_getname(class), addr, di->bas.regshft, di->baudrate,
+		di->bas.rclk, di->stopbits, di->bas.regiowidth);
 	freeenv(cp);
 	return (EINVAL);
 }

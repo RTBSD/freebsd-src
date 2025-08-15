@@ -108,6 +108,10 @@ uart_cpu_fdt_setup(struct uart_class *class, int devtype, struct uart_devinfo *d
 	uart_bus_space_mem = di->bas.bst;
 	uart_bus_space_io = NULL;
 
+	printf("%s-success: uart,dt:%s,mm:<>,rs:%d,br:%d,xo:%d,sb:%d,rw:%d\n", 
+		__func__, uart_getname(class), di->bas.regshft, di->baudrate,
+		di->bas.rclk, di->stopbits, di->bas.regiowidth);
+
 	return (0);
 }
 #endif
@@ -127,6 +131,12 @@ uart_cpu_getdev(int devtype, struct uart_devinfo *di)
 #ifdef DEV_ACPI
 	/* Check if SPCR can tell us what console to use. */
 	if (uart_cpu_acpi_spcr(devtype, di) == 0)
+		return (0);
+
+	/* If none SPCR, try if it is pl011 uart */
+	class = &uart_pl011_class;
+	err = uart_getenv(devtype, di, class);
+	if (err == 0)
 		return (0);
 #endif
 #ifdef FDT

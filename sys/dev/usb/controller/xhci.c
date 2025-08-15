@@ -540,7 +540,8 @@ xhci_init(struct xhci_softc *sc, device_t self, uint8_t dma32)
 	DPRINTF("RUNTIMEOFFSET=0x%x\n", sc->sc_runt_off);
 	DPRINTF("DOOROFFSET=0x%x\n", sc->sc_door_off);
 
-	DPRINTF("xHCI version = 0x%04x\n", XREAD2(sc, capa, XHCI_HCIVERSION));
+	uint32_t version = (XREAD4(sc, capa, XHCI_CAPLENGTH) >> 16) & 0xFFFF;
+	DPRINTF("xHCI version = 0x%04x\n", version);
 
 	if (!(XREAD4(sc, oper, XHCI_PAGESIZE) & XHCI_PAGESIZE_4K)) {
 		device_printf(sc->sc_bus.parent, "Controller does "

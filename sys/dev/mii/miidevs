@@ -295,6 +295,7 @@ model MICREL KSZ9031		0x0022 Micrel KSZ9031 10/100/1000 PHY
 
 /* Motorcomm PHYs */
 model MOTORCOMM YT8511		0x010a Motorcomm YT8511 10/100/1000 PHY
+model MOTORCOMM YT8521		0x0011 Motorcomm YT8521 10/100/1000 PHY
 
 /* Myson Technology PHYs */
 model xxMYSON MTD972		0x0000 MTD972 10/100 media interface

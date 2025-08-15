@@ -45,10 +45,15 @@
 #include <dev/mii/miivar.h>
 
 #include "miibus_if.h"
+#include "miidevs.h"
 
 #define	MCOMMPHY_OUI			0x000000
 #define	MCOMMPHY_MODEL			0x10
 #define	MCOMMPHY_REV			0x0a
+
+#define	MOTORCOMM_OUI			0x000000
+#define	MOTORCOMM_MODEL			0x10
+#define	MOTORCOMM_REV			0x0a
 
 #define	EXT_REG_ADDR			0x1e
 #define	EXT_REG_DATA			0x1f
@@ -64,6 +69,12 @@
 
 #define	LOWEST_SET_BIT(mask)		((((mask) - 1) & (mask)) ^ (mask))
 #define	SHIFTIN(x, mask)		((x) * LOWEST_SET_BIT(mask))
+
+static const struct mii_phydesc mcomphys[] = {
+	MII_PHY_DESC(MOTORCOMM, YT8511),
+	MII_PHY_DESC(MOTORCOMM, YT8521),
+	MII_PHY_END
+};
 
 static int
 mcommphy_service(struct mii_softc *sc, struct mii_data *mii, int cmd)
@@ -106,13 +117,13 @@ mcommphy_probe(device_t dev)
 	 * The YT8511C reports an OUI of 0. Best we can do here is to match
 	 * exactly the contents of the PHY identification registers.
 	 */
-	if (MII_OUI(ma->mii_id1, ma->mii_id2) == MCOMMPHY_OUI &&
-	    MII_MODEL(ma->mii_id2) == MCOMMPHY_MODEL &&
-	    MII_REV(ma->mii_id2) == MCOMMPHY_REV) {
-		device_set_desc(dev, "Motorcomm YT8511 media interface");
-		return BUS_PROBE_DEFAULT;
-	}
-	return (ENXIO);
+	if (MII_OUI(ma->mii_id1, ma->mii_id2) == MOTORCOMM_OUI &&
+	    MII_MODEL(ma->mii_id2) == MOTORCOMM_MODEL &&
+	    MII_REV(ma->mii_id2) == MOTORCOMM_REV) {
+ 		device_set_desc(dev, "Motorcomm YT8511 media interface");
+ 		return BUS_PROBE_DEFAULT;
+ 	}
+	return (mii_phy_dev_probe(dev, mcomphys, BUS_PROBE_DEFAULT));
 }
 
 static int

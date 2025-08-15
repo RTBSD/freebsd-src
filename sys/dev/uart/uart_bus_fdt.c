@@ -288,6 +288,10 @@ uart_fdt_probe(device_t dev)
 	if (uart_fdt_get_io_width(node, &iowidth) != 0)
 		iowidth = uart_getregiowidth(sc->sc_class);
 
+	printf("%s-success: uart,dt:%s,mm:<>,rs:%d,br:%d,xo:%d,sb:%d,rw:%d\n", 
+		__func__, uart_getname(sc->sc_class), shift, 0,
+		clock, 0, iowidth);
+
 	return (uart_bus_probe(dev, (int)shift, (int)iowidth, (int)clock, 0, 0, 0));
 }
 

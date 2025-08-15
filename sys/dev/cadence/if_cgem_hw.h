@@ -204,6 +204,10 @@
 #define CGEM_RX_PAUSEQ			0x038	/* Received Pause Quantum */
 #define CGEM_TX_PAUSEQ			0x03C	/* Transmit Puase Quantum */
 
+#define CGEM_HSMAC				 0x050
+#define CGEM_HSMACSPEED_MASK	 0x7
+
+
 #define CGEM_HASH_BOT			0x080	/* Hash Reg Bottom [31:0] */
 #define CGEM_HASH_TOP			0x084	/* Hash Reg Top [63:32] */
 #define CGEM_SPEC_ADDR_LOW(n)		(0x088 + (n) * 8)

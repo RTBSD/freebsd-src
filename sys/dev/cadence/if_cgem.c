@@ -102,6 +102,7 @@
 #define HWQUIRK_NONE		0
 #define HWQUIRK_NEEDNULLQS	1
 #define HWQUIRK_RXHANGWAR	2
+#define HWQUIRK_FIREFLY		4
 
 static struct ofw_compat_data compat_data[] = {
 	{ "cdns,zynq-gem",		HWQUIRK_RXHANGWAR }, /* Deprecated */
@@ -111,6 +112,7 @@ static struct ofw_compat_data compat_data[] = {
 	{ "microchip,mpfs-mss-gem",	HWQUIRK_NEEDNULLQS },
 	{ "sifive,fu540-c000-gem",	HWQUIRK_NONE },
 	{ "sifive,fu740-c000-gem",	HWQUIRK_NONE },
+	{ "cdns,firefly",			HWQUIRK_NEEDNULLQS | HWQUIRK_FIREFLY },
 	{ NULL,				0 }
 };
 
@@ -134,6 +136,7 @@ struct cgem_softc {
 	clk_t			clk_tsuclk;
 	int			neednullqs;
 	int			phy_contype;
+	int			firefly_type;
 
 	bus_dma_tag_t		desc_dma_tag;
 	bus_dma_tag_t		mbuf_dma_tag;
@@ -240,6 +243,7 @@ static void cgem_tick(void *);
 static void cgem_intr(void *);
 
 static void cgem_mediachange(struct cgem_softc *, struct mii_data *);
+static void cgem_mediachange_firefly(struct cgem_softc *, struct mii_data *);
 
 static void
 cgem_get_mac(struct cgem_softc *sc, u_char eaddr[])
@@ -1438,8 +1442,13 @@ cgem_miibus_statchg(device_t dev)
 
 	if ((mii->mii_media_status & (IFM_ACTIVE | IFM_AVALID)) ==
 	    (IFM_ACTIVE | IFM_AVALID) &&
-	    sc->mii_media_active != mii->mii_media_active)
-		cgem_mediachange(sc, mii);
+	    sc->mii_media_active != mii->mii_media_active) {
+		if (sc->firefly_type) {
+			cgem_mediachange_firefly(sc, mii);
+		} else {
+			cgem_mediachange(sc, mii);
+		}
+	}
 }
 
 static void
@@ -1452,8 +1461,13 @@ cgem_miibus_linkchg(device_t dev)
 
 	if ((mii->mii_media_status & (IFM_ACTIVE | IFM_AVALID)) ==
 	    (IFM_ACTIVE | IFM_AVALID) &&
-	    sc->mii_media_active != mii->mii_media_active)
-		cgem_mediachange(sc, mii);
+	    sc->mii_media_active != mii->mii_media_active) {
+		if (sc->firefly_type) {
+			cgem_mediachange_firefly(sc, mii);
+		} else {
+			cgem_mediachange(sc, mii);
+		}
+	}
 }
 
 /*
@@ -1467,6 +1481,146 @@ cgem_default_set_ref_clk(int unit, int frequency)
 	return 0;
 }
 __weak_reference(cgem_default_set_ref_clk, cgem_set_ref_clk);
+
+static int
+cgem_1p0_set_ref_clk(struct cgem_softc *sc, int interface_type,
+    int interface_speed)
+{
+	uint32_t reg_value;
+	uint32_t set_speed = 0;
+
+	/* TODO: 10GBASER/USXGMII/5GBASER/2500BASEX */
+	if (interface_type == MII_CONTYPE_SGMII) {
+		if (interface_speed == 1000) {
+			WR4(sc, 0x1c04, 0x1); /*0x1c04*/
+			WR4(sc, 0x1c08, 0x4); /*0x1c08*/
+			WR4(sc, 0x1c0c, 0x8); /*0x1c0c*/
+			WR4(sc, 0x1c10, 0x1); /*0x1c10*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x0); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x0); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x1); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x1); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x0); /*0x1c34*/
+			WR4(sc, 0x1c70, 0x0); /*0x1c70*/
+			WR4(sc, 0x1c74, 0x0); /*0x1c74*/
+			WR4(sc, 0x1c78, 0x0); /*0x1c78*/
+			WR4(sc, 0x1c7c, 0x0); /*0x1c7c*/
+		} else if (interface_speed == 100 ||
+		    interface_speed == 10) {
+			WR4(sc, 0x1c04, 0x1); /*0x1c04*/
+			WR4(sc, 0x1c08, 0x4); /*0x1c08*/
+			WR4(sc, 0x1c0c, 0x8); /*0x1c0c*/
+			WR4(sc, 0x1c10, 0x1); /*0x1c10*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x0); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x1); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x1); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x1); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x0); /*0x1c34*/
+			WR4(sc, 0x1c70, 0x1); /*0x1c70*/
+			WR4(sc, 0x1c74, 0x0); /*0x1c74*/
+			WR4(sc, 0x1c78, 0x0); /*0x1c78*/
+			WR4(sc, 0x1c7c, 0x1); /*0x1c7c*/
+		}
+	} else if ((interface_type == MII_CONTYPE_RGMII) ||
+	    (interface_type == MII_CONTYPE_RGMII_ID)) {
+		if (interface_speed == 1000) {
+			WR4(sc, 0x1c18, 0x1); /*0x1c18*/
+			WR4(sc, 0x1c1c, 0x0); /*0x1c1c*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x1); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x0); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x0); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x0); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x1); /*0x1c34*/
+			WR4(sc, 0x1c38, 0x0); /*0x1c38*/
+			WR4(sc, 0x1c48, 0x1); /*0x1c48*/
+			WR4(sc, 0x1c80, 0x1); /*0x1c80*/
+			WR4(sc, 0x1c84, 0x0); /*0x1c84*/
+		} else if (interface_speed == 100) {
+			WR4(sc, 0x1c18, 0x1); /*0x1c18*/
+			WR4(sc, 0x1c1c, 0x0); /*0x1c1c*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x1); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x0); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x0); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x0); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x1); /*0x1c34*/
+			WR4(sc, 0x1c38, 0x0); /*0x1c38*/
+			WR4(sc, 0x1c48, 0x1); /*0x1c48*/
+			WR4(sc, 0x1c80, 0x0); /*0x1c80*/
+			WR4(sc, 0x1c84, 0x0); /*0x1c84*/
+		} else {
+			WR4(sc, 0x1c18, 0x1); /*0x1c18*/
+			WR4(sc, 0x1c1c, 0x0); /*0x1c1c*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x1); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x0); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x0); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x0); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x1); /*0x1c34*/
+			WR4(sc, 0x1c38, 0x1); /*0x1c38*/
+			WR4(sc, 0x1c48, 0x1); /*0x1c48*/
+			WR4(sc, 0x1c80, 0x0); /*0x1c80*/
+			WR4(sc, 0x1c84, 0x0); /*0x1c84*/
+		}
+	} else if (interface_type == MII_CONTYPE_RMII) {
+		WR4(sc, 0x1c48, 0x1); /*0x1c48*/
+	}
+
+	if (interface_speed == 100)
+		set_speed = 0;
+	else if (interface_speed == 1000)
+		set_speed = 1;
+	else if (interface_speed == 2500)
+		set_speed = 2;
+	else if (interface_speed == 5000)
+		set_speed = 3;
+	else if (interface_speed == 10000)
+		set_speed = 4;
+
+	/* GEM_HSMAC(0x0050) provide rate to the external */
+	reg_value = RD4(sc, CGEM_HSMAC);
+	reg_value &= ~CGEM_HSMACSPEED_MASK;
+	reg_value |= (set_speed)&CGEM_HSMACSPEED_MASK;
+	WR4(sc, CGEM_HSMAC, reg_value);
+
+	return 0;
+}
+
+#if 0
+int
+cgem_2p0_set_ref_clk(struct cgem_softc *sc, int interface_type,
+    int interface_speed)
+{
+	uint32_t reg_value;
+	uint32_t set_speed = 0;
+
+	if (interface_type == MII_CONTYPE_SGMII) {
+		if (interface_speed == 100 ||
+		    interface_speed == 10) {
+			WR4(sc, 0x1c04, 0x1); /*0x1c04*/
+			WR4(sc, 0x1c0c, 0x1); /*0x1c0c*/
+		}
+	}
+
+	if (interface_speed == 100)
+		set_speed = 0;
+	else if (interface_speed == 1000)
+		set_speed = 1;
+	else if (interface_speed == 2500)
+		set_speed = 2;
+
+	/* GEM_HSMAC(0x0050) provide rate to the external */
+	reg_value = RD4(sc, CGEM_HSMAC);
+	reg_value &= ~CGEM_HSMACSPEED_MASK;
+	reg_value |= (set_speed)&CGEM_HSMACSPEED_MASK;
+	WR4(sc, CGEM_HSMAC, reg_value);
+
+	return 0;
+}
+#endif
 
 /* Call to set reference clock and network config bits according to media. */
 static void
@@ -1506,6 +1660,50 @@ cgem_mediachange(struct cgem_softc *sc,	struct mii_data *mii)
 			    ref_clk_freq);
 		CGEM_LOCK(sc);
 	}
+
+	sc->mii_media_active = mii->mii_media_active;
+}
+
+/* Call to set reference clock and network config bits according to media. */
+static void
+cgem_mediachange_firefly(struct cgem_softc *sc, struct mii_data *mii)
+{
+	int interface_speed = 1000;
+
+	CGEM_ASSERT_LOCKED(sc);
+
+	/* Update hardware to reflect media. */
+	sc->net_cfg_shadow &= ~(CGEM_NET_CFG_SPEED100 | CGEM_NET_CFG_GIGE_EN |
+	    CGEM_NET_CFG_FULL_DUPLEX);
+
+	switch (IFM_SUBTYPE(mii->mii_media_active)) {
+	case IFM_1000_T:
+		sc->net_cfg_shadow |= (CGEM_NET_CFG_SPEED100 |
+		    CGEM_NET_CFG_GIGE_EN);
+		interface_speed = 1000;
+		break;
+	case IFM_100_TX:
+		sc->net_cfg_shadow |= CGEM_NET_CFG_SPEED100;
+		interface_speed = 100;
+		break;
+	default:
+		break;
+	}
+
+	if ((mii->mii_media_active & IFM_FDX) != 0)
+		sc->net_cfg_shadow |= CGEM_NET_CFG_FULL_DUPLEX;
+
+	WR4(sc, CGEM_NET_CFG, sc->net_cfg_shadow);
+
+	/* Set the reference clock if necessary. */
+	CGEM_UNLOCK(sc);
+	if (cgem_1p0_set_ref_clk(sc, sc->phy_contype, interface_speed)) {
+		device_printf(sc->dev,
+			"cgem_mediachange_firefly: "
+			"could not set ref clk for speed %d.\n",
+			interface_speed);
+	}
+	CGEM_LOCK(sc);
 
 	sc->mii_media_active = mii->mii_media_active;
 }
@@ -1746,6 +1944,8 @@ cgem_attach(device_t dev)
 		sc->neednullqs = 1;
 	if ((hwquirks & HWQUIRK_RXHANGWAR) != 0)
 		sc->rxhangwar = 1;
+	if ((hwquirks & HWQUIRK_FIREFLY) != 0)
+		sc->firefly_type = 1;
 	/*
 	 * Both pclk and hclk are mandatory but we don't have a proper
 	 * clock driver for Zynq so don't make it fatal if we can't
