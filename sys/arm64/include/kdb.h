@@ -39,6 +39,8 @@ void kdb_cpu_clear_singlestep(void);
 void kdb_cpu_set_singlestep(void);
 int kdb_cpu_set_watchpoint(vm_offset_t addr, size_t size, int access);
 int kdb_cpu_clr_watchpoint(vm_offset_t addr, size_t size);
+int kdb_cpu_set_hwbreakpoint(vm_offset_t addr, vm_size_t size);
+int kdb_cpu_clr_hwbreakpoint(vm_offset_t addr, vm_size_t size);
 
 static __inline void
 kdb_cpu_sync_icache(unsigned char *addr, size_t size)

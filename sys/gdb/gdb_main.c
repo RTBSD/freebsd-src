@@ -649,6 +649,9 @@ gdb_z_insert(void)
 		    (vm_size_t)length, KDB_DBG_ACCESS_RW);
 		break;
 	case '1': /* hardware breakpoint */
+		error = kdb_cpu_set_hwbreakpoint((vm_offset_t)addr,
+		    (vm_size_t)length);
+		break;
 	case '0': /* software breakpoint */
 		/* Not implemented. */
 		gdb_tx_empty();
@@ -693,6 +696,9 @@ gdb_z_remove(void)
 		    (vm_size_t)length);
 		break;
 	case '1': /* hardware breakpoint */
+		error = kdb_cpu_clr_hwbreakpoint((vm_offset_t)addr,
+		    (vm_size_t)length);
+		break;
 	case '0': /* software breakpoint */
 		/* Not implemented. */
 		gdb_tx_empty();

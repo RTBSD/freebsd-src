@@ -3,7 +3,9 @@
 #
 
 # SoC support
-options 	SOC_FIREFLY_PI
+options 	SOC_FIREFLY_V1
+options 	SOC_FIREFLY_V2
+
 
 # DTBs
 makeoptions	MODULES_EXTRA+="dtb/firefly"

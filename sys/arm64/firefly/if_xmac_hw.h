@@ -39,8 +39,8 @@
  * https://www.xilinx.com/html_docs/registers/ug1087/ug1087-zynq-ultrascale-registers.html
  */
 
-#ifndef _IF_CGEM_HW_H_
-#define _IF_CGEM_HW_H_
+#ifndef _IF_XMAC_HW_H_
+#define _IF_XMAC_HW_H_
 
 /* Cadence GEM hardware register definitions. */
 #define CGEM_NET_CTRL			0x000	/* Network Control */
@@ -182,6 +182,7 @@
 #define   CGEM_INTR_TX_COMPLETE			(1 << 7)
 #define   CGEM_INTR_TX_CORRUPT_AHB_ERR		(1 << 6)
 #define   CGEM_INTR_RETRY_EX_LATE_COLLISION	(1 << 5)
+#define   CGEM_INTR_TX_URUN				(1 << 4)
 #define   CGEM_INTR_TX_USED_READ		(1 << 3)
 #define   CGEM_INTR_RX_USED_READ		(1 << 2)
 #define   CGEM_INTR_RX_COMPLETE			(1 << 1)
@@ -203,6 +204,10 @@
 
 #define CGEM_RX_PAUSEQ			0x038	/* Received Pause Quantum */
 #define CGEM_TX_PAUSEQ			0x03C	/* Transmit Puase Quantum */
+
+#define CGEM_HSMAC				 0x050
+#define CGEM_HSMACSPEED_MASK	 0x7
+
 
 #define CGEM_HASH_BOT			0x080	/* Hash Reg Bottom [31:0] */
 #define CGEM_HASH_TOP			0x084	/* Hash Reg Top [63:32] */
@@ -441,4 +446,4 @@ struct cgem_rx_desc {
 #endif
 };
 
-#endif /* _IF_CGEM_HW_H_ */
+#endif /* _IF_XMAC_HW_H_ */

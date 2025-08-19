@@ -34,6 +34,9 @@
  * (v1.4) November 16, 2012.  Xilinx doc UG585.  GEM is covered in Ch. 16
  * and register definitions are in appendix B.18.
  */
+#ifdef __rtems__
+#include <machine/rtems-bsd-kernel-space.h>
+#endif /* __rtems__ */
 
 #include <sys/cdefs.h>
 #include <sys/param.h>
@@ -78,15 +81,17 @@
 
 #include <dev/extres/clk/clk.h>
 
-#if BUS_SPACE_MAXADDR > BUS_SPACE_MAXADDR_32BIT
 #define CGEM64
+
+#ifdef __rtems__
+#include <rtems/bsd/local/miibus_if.h>
+#include "if_xmac_hw.h"
+#else
+#include "miibus_if.h"
+#include <arm64/firefly/if_xmac_hw.h>
 #endif
 
-#include <dev/cadence/if_cgem_hw.h>
-
-#include "miibus_if.h"
-
-#define IF_CGEM_NAME "cgem"
+#define IF_CGEM_NAME "xmac"
 
 #define CGEM_NUM_RX_DESCS	512	/* size of receive descriptor ring */
 #define CGEM_NUM_TX_DESCS	512	/* size of transmit descriptor ring */
@@ -104,13 +109,7 @@
 #define HWQUIRK_RXHANGWAR	2
 
 static struct ofw_compat_data compat_data[] = {
-	{ "cdns,zynq-gem",		HWQUIRK_RXHANGWAR }, /* Deprecated */
-	{ "cdns,zynqmp-gem",		HWQUIRK_NEEDNULLQS }, /* Deprecated */
-	{ "xlnx,zynq-gem",		HWQUIRK_RXHANGWAR },
-	{ "xlnx,zynqmp-gem",		HWQUIRK_NEEDNULLQS },
-	{ "microchip,mpfs-mss-gem",	HWQUIRK_NEEDNULLQS },
-	{ "sifive,fu540-c000-gem",	HWQUIRK_NONE },
-	{ "sifive,fu740-c000-gem",	HWQUIRK_NONE },
+	{ "firefly,xmac",			HWQUIRK_NEEDNULLQS },
 	{ NULL,				0 }
 };
 
@@ -362,6 +361,7 @@ cgem_rx_filter(struct cgem_softc *sc)
 	WR4(sc, CGEM_NET_CFG, sc->net_cfg_shadow);
 }
 
+#ifndef __rtems__
 /* For bus_dmamap_load() callback. */
 static void
 cgem_getaddr(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
@@ -371,6 +371,7 @@ cgem_getaddr(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 		return;
 	*(bus_addr_t *)arg = segs[0].ds_addr;
 }
+#endif
 
 /* Set up null queues for priority queues we actually can't disable. */
 static void
@@ -451,12 +452,17 @@ cgem_setup_descs(struct cgem_softc *sc)
 	if (err)
 		return (err);
 
+#ifndef __rtems__
 	/* Load descriptor DMA memory. */
 	err = bus_dmamap_load(sc->desc_dma_tag, sc->rxring_dma_map,
 	    (void *)sc->rxring, desc_rings_size,
 	    cgem_getaddr, &sc->rxring_physaddr, BUS_DMA_NOWAIT);
 	if (err)
 		return (err);
+#else /* __rtems__ */
+    sc->rxring_physaddr = (bus_addr_t)(void *)sc->rxring;
+    wmb();
+#endif /* __rtems__ */
 
 	/* Initialize RX descriptors. */
 	for (i = 0; i < CGEM_NUM_RX_DESCS; i++) {
@@ -499,6 +505,35 @@ cgem_setup_descs(struct cgem_softc *sc)
 	return (0);
 }
 
+#ifdef __rtems__
+static int
+cgem_get_segs_for_rx(struct mbuf *m, bus_dma_segment_t segs[TX_MAX_DMA_SEGS],
+    int *nsegs)
+{
+	int i = 0;
+
+	do {
+		if (m->m_len > 0) {
+			segs[i].ds_addr = mtod(m, bus_addr_t);
+			segs[i].ds_len = m->m_len;
+			rtems_cache_invalidate_multiple_data_lines(m->m_data, m->m_len);
+			++i;
+		}
+
+		m = m->m_next;
+
+		if (m == NULL) {
+			*nsegs = i;
+
+			return (0);
+		}
+	} while (i < TX_MAX_DMA_SEGS);
+
+	printf("%s: too many segments for rx mbuf chain\n", IF_CGEM_NAME);
+	return (EFBIG);
+}
+#endif /* __rtems__ */
+
 /* Fill receive descriptor ring with mbufs. */
 static void
 cgem_fill_rqueue(struct cgem_softc *sc)
@@ -520,6 +555,7 @@ cgem_fill_rqueue(struct cgem_softc *sc)
 		m->m_pkthdr.rcvif = sc->ifp;
 
 		/* Load map and plug in physical address. */
+#ifndef __rtems__
 		if (bus_dmamap_create(sc->mbuf_dma_tag, 0,
 		    &sc->rxring_m_dmamap[sc->rxring_hd_ptr])) {
 			sc->rxdmamapfails++;
@@ -536,12 +572,23 @@ cgem_fill_rqueue(struct cgem_softc *sc)
 			m_free(m);
 			break;
 		}
+#else  /* __rtems__ */
+		if (cgem_get_segs_for_rx(m, segs, &nsegs)) {
+			sc->rxdmamapfails++;
+			m_free(m);
+			break;
+		}
+#endif /* __rtems__ */
 		sc->rxring_m[sc->rxring_hd_ptr] = m;
 
 		/* Sync cache with receive buffer. */
+#ifndef __rtems__
 		bus_dmamap_sync(sc->mbuf_dma_tag,
 		    sc->rxring_m_dmamap[sc->rxring_hd_ptr],
 		    BUS_DMASYNC_PREREAD);
+#else /* __rtems__ */
+		rtems_cache_invalidate_multiple_data_lines(m->m_data, m->m_len);
+#endif /* __rtems__ */
 
 		/* Write rx descriptor and increment head pointer. */
 		sc->rxring[sc->rxring_hd_ptr].ctl = 0;
@@ -581,16 +628,24 @@ cgem_recv(struct cgem_softc *sc)
 		sc->rxring_m[sc->rxring_tl_ptr] = NULL;
 
 		/* Sync cache with receive buffer. */
+#ifndef __rtems__
 		bus_dmamap_sync(sc->mbuf_dma_tag,
 		    sc->rxring_m_dmamap[sc->rxring_tl_ptr],
 		    BUS_DMASYNC_POSTREAD);
+#else /* __rtems__ */
+		rtems_cache_invalidate_multiple_data_lines(m->m_data, m->m_len);
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 		/* Unload and destroy dmamap. */
 		bus_dmamap_unload(sc->mbuf_dma_tag,
 		    sc->rxring_m_dmamap[sc->rxring_tl_ptr]);
 		bus_dmamap_destroy(sc->mbuf_dma_tag,
 		    sc->rxring_m_dmamap[sc->rxring_tl_ptr]);
 		sc->rxring_m_dmamap[sc->rxring_tl_ptr] = NULL;
+#else /* __rtems__ */
+		wmb();
+#endif /* __rtems__ */
 
 		/* Increment tail pointer. */
 		if (++sc->rxring_tl_ptr == CGEM_NUM_RX_DESCS)
@@ -674,6 +729,7 @@ cgem_clean_tx(struct cgem_softc *sc)
 	    ((ctl = sc->txring[sc->txring_tl_ptr].ctl) &
 	    CGEM_TXDESC_USED) != 0) {
 		/* Sync cache. */
+#ifndef __rtems__
 		bus_dmamap_sync(sc->mbuf_dma_tag,
 		    sc->txring_m_dmamap[sc->txring_tl_ptr],
 		    BUS_DMASYNC_POSTWRITE);
@@ -684,6 +740,9 @@ cgem_clean_tx(struct cgem_softc *sc)
 		bus_dmamap_destroy(sc->mbuf_dma_tag,
 		    sc->txring_m_dmamap[sc->txring_tl_ptr]);
 		sc->txring_m_dmamap[sc->txring_tl_ptr] = NULL;
+#else /* __rtems__ */
+		wmb();
+#endif /* __rtems__ */
 
 		/* Free up the mbuf. */
 		m = sc->txring_m[sc->txring_tl_ptr];
@@ -738,6 +797,35 @@ cgem_clean_tx(struct cgem_softc *sc)
 	}
 }
 
+#ifdef __rtems__
+static int
+cgem_get_segs_for_tx(struct mbuf *m, bus_dma_segment_t segs[TX_MAX_DMA_SEGS],
+    int *nsegs)
+{
+	int i = 0;
+
+	do {
+		if (m->m_len > 0) {
+			segs[i].ds_addr = mtod(m, bus_addr_t);
+			segs[i].ds_len = m->m_len;
+			rtems_cache_flush_multiple_data_lines(m->m_data, m->m_len);
+			++i;
+		}
+
+		m = m->m_next;
+
+		if (m == NULL) {
+			*nsegs = i;
+
+			return (0);
+		}
+	} while (i < TX_MAX_DMA_SEGS);
+
+	printf("%s: too many segments for tx mbuf chain\n", IF_CGEM_NAME);
+	return (EFBIG);
+}
+#endif /* __rtems__ */
+
 /* Start transmits. */
 static void
 cgem_start_locked(if_t ifp)
@@ -774,6 +862,7 @@ cgem_start_locked(if_t ifp)
 		if (m == NULL)
 			break;
 
+#ifndef __rtems__
 		/* Create and load DMA map. */
 		if (bus_dmamap_create(sc->mbuf_dma_tag, 0,
 			&sc->txring_m_dmamap[sc->txring_hd_ptr])) {
@@ -784,6 +873,9 @@ cgem_start_locked(if_t ifp)
 		err = bus_dmamap_load_mbuf_sg(sc->mbuf_dma_tag,
 		    sc->txring_m_dmamap[sc->txring_hd_ptr], m, segs, &nsegs,
 		    BUS_DMA_NOWAIT);
+#else /* __rtems__ */
+		err = cgem_get_segs_for_tx(m, segs, &nsegs);
+#endif /* __rtems__ */
 		if (err == EFBIG) {
 			/* Too many segments!  defrag and try again. */
 			struct mbuf *m2 = m_defrag(m, M_NOWAIT);
@@ -791,32 +883,44 @@ cgem_start_locked(if_t ifp)
 			if (m2 == NULL) {
 				sc->txdefragfails++;
 				m_freem(m);
+#ifndef __rtems__
 				bus_dmamap_destroy(sc->mbuf_dma_tag,
 				    sc->txring_m_dmamap[sc->txring_hd_ptr]);
 				sc->txring_m_dmamap[sc->txring_hd_ptr] = NULL;
+#endif /* __rtems__ */
 				continue;
 			}
 			m = m2;
+#ifndef __rtems__
 			err = bus_dmamap_load_mbuf_sg(sc->mbuf_dma_tag,
 			    sc->txring_m_dmamap[sc->txring_hd_ptr], m, segs,
 			    &nsegs, BUS_DMA_NOWAIT);
+#else /* __rtems__ */
+			err = cgem_get_segs_for_tx(m, segs, &nsegs);
+#endif /* __rtems__ */
 			sc->txdefrags++;
 		}
 		if (err) {
 			/* Give up. */
 			m_freem(m);
+#ifndef __rtems__
 			bus_dmamap_destroy(sc->mbuf_dma_tag,
 			    sc->txring_m_dmamap[sc->txring_hd_ptr]);
 			sc->txring_m_dmamap[sc->txring_hd_ptr] = NULL;
+#endif /* __rtems__ */
 			sc->txdmamapfails++;
 			continue;
 		}
 		sc->txring_m[sc->txring_hd_ptr] = m;
 
+#ifndef __rtems__
 		/* Sync tx buffer with cache. */
 		bus_dmamap_sync(sc->mbuf_dma_tag,
 		    sc->txring_m_dmamap[sc->txring_hd_ptr],
 		    BUS_DMASYNC_PREWRITE);
+#else /* __rtems__ */
+		rtems_cache_flush_multiple_data_lines(m->m_data, m->m_len);
+#endif /* __rtems__ */
 
 		/* Set wrap flag if next packet might run off end of ring. */
 		wrap = sc->txring_hd_ptr + nsegs + TX_MAX_DMA_SEGS >=
@@ -979,6 +1083,7 @@ cgem_intr(void *arg)
 	struct cgem_softc *sc = (struct cgem_softc *)arg;
 	if_t ifp = sc->ifp;
 	uint32_t istatus;
+	uint32_t txstat, rxstat;
 
 	CGEM_LOCK(sc);
 
@@ -990,6 +1095,24 @@ cgem_intr(void *arg)
 	/* Read interrupt status and immediately clear the bits. */
 	istatus = RD4(sc, CGEM_INTR_STAT);
 	WR4(sc, CGEM_INTR_STAT, istatus);
+
+	/* Check TX error */
+	if ((istatus & CGEM_INTR_TX_CORRUPT_AHB_ERR) ||
+		(istatus & CGEM_INTR_RETRY_EX_LATE_COLLISION) ||
+		(istatus & CGEM_INTR_TX_URUN)) {
+		txstat = RD4(sc, CGEM_TX_STAT);
+		WR4(sc, CGEM_TX_STAT, txstat);
+		printf("cgem_intr: txstat=0x%x\n", txstat);
+	}
+
+	/* Check RX error */
+	if ((istatus & CGEM_INTR_HRESP_NOT_OK) ||
+		(istatus & CGEM_INTR_RX_USED_READ) ||
+		(istatus & CGEM_INTR_RX_OVERRUN)) {
+		rxstat = RD4(sc, CGEM_RX_STAT);
+		WR4(sc, CGEM_RX_STAT, rxstat);
+		printf("cgem_intr: rxstat=0x%x\n", rxstat);
+	}
 
 	/* Packets received. */
 	if ((istatus & CGEM_INTR_RX_COMPLETE) != 0)
@@ -1188,12 +1311,14 @@ cgem_stop(struct cgem_softc *sc)
 	for (i = 0; i < CGEM_NUM_TX_DESCS; i++) {
 		sc->txring[i].ctl = CGEM_TXDESC_USED;
 		if (sc->txring_m[i]) {
+#ifndef __rtems__
 			/* Unload and destroy dmamap. */
 			bus_dmamap_unload(sc->mbuf_dma_tag,
 			    sc->txring_m_dmamap[i]);
 			bus_dmamap_destroy(sc->mbuf_dma_tag,
 			    sc->txring_m_dmamap[i]);
 			sc->txring_m_dmamap[i] = NULL;
+#endif /* __rtems__ */
 			m_freem(sc->txring_m[i]);
 			sc->txring_m[i] = NULL;
 		}
@@ -1209,13 +1334,14 @@ cgem_stop(struct cgem_softc *sc)
 	for (i = 0; i < CGEM_NUM_RX_DESCS; i++) {
 		sc->rxring[i].addr = CGEM_RXDESC_OWN;
 		if (sc->rxring_m[i]) {
+#ifndef __rtems__
 			/* Unload and destroy dmamap. */
 			bus_dmamap_unload(sc->mbuf_dma_tag,
 			    sc->rxring_m_dmamap[i]);
 			bus_dmamap_destroy(sc->mbuf_dma_tag,
 			    sc->rxring_m_dmamap[i]);
 			sc->rxring_m_dmamap[i] = NULL;
-
+#endif /* __rtems__ */
 			m_freem(sc->rxring_m[i]);
 			sc->rxring_m[i] = NULL;
 		}
@@ -1438,8 +1564,9 @@ cgem_miibus_statchg(device_t dev)
 
 	if ((mii->mii_media_status & (IFM_ACTIVE | IFM_AVALID)) ==
 	    (IFM_ACTIVE | IFM_AVALID) &&
-	    sc->mii_media_active != mii->mii_media_active)
-		cgem_mediachange(sc, mii);
+	    sc->mii_media_active != mii->mii_media_active) {
+			cgem_mediachange(sc, mii);
+	}
 }
 
 static void
@@ -1452,8 +1579,9 @@ cgem_miibus_linkchg(device_t dev)
 
 	if ((mii->mii_media_status & (IFM_ACTIVE | IFM_AVALID)) ==
 	    (IFM_ACTIVE | IFM_AVALID) &&
-	    sc->mii_media_active != mii->mii_media_active)
-		cgem_mediachange(sc, mii);
+	    sc->mii_media_active != mii->mii_media_active) {
+			cgem_mediachange(sc, mii);
+	}
 }
 
 /*
@@ -1468,11 +1596,149 @@ cgem_default_set_ref_clk(int unit, int frequency)
 }
 __weak_reference(cgem_default_set_ref_clk, cgem_set_ref_clk);
 
+static int
+cgem_1p0_set_ref_clk(struct cgem_softc *sc, int interface_type,
+    int interface_speed)
+{
+	uint32_t reg_value;
+	uint32_t set_speed = 0;
+
+	/* TODO: 10GBASER/USXGMII/5GBASER/2500BASEX */
+	if (interface_type == MII_CONTYPE_SGMII) {
+		if (interface_speed == 1000) {
+			WR4(sc, 0x1c04, 0x1); /*0x1c04*/
+			WR4(sc, 0x1c08, 0x4); /*0x1c08*/
+			WR4(sc, 0x1c0c, 0x8); /*0x1c0c*/
+			WR4(sc, 0x1c10, 0x1); /*0x1c10*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x0); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x0); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x1); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x1); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x0); /*0x1c34*/
+			WR4(sc, 0x1c70, 0x0); /*0x1c70*/
+			WR4(sc, 0x1c74, 0x0); /*0x1c74*/
+			WR4(sc, 0x1c78, 0x0); /*0x1c78*/
+			WR4(sc, 0x1c7c, 0x0); /*0x1c7c*/
+		} else if (interface_speed == 100 ||
+		    interface_speed == 10) {
+			WR4(sc, 0x1c04, 0x1); /*0x1c04*/
+			WR4(sc, 0x1c08, 0x4); /*0x1c08*/
+			WR4(sc, 0x1c0c, 0x8); /*0x1c0c*/
+			WR4(sc, 0x1c10, 0x1); /*0x1c10*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x0); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x1); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x1); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x1); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x0); /*0x1c34*/
+			WR4(sc, 0x1c70, 0x1); /*0x1c70*/
+			WR4(sc, 0x1c74, 0x0); /*0x1c74*/
+			WR4(sc, 0x1c78, 0x0); /*0x1c78*/
+			WR4(sc, 0x1c7c, 0x1); /*0x1c7c*/
+		}
+	} else if ((interface_type == MII_CONTYPE_RGMII) ||
+	    (interface_type == MII_CONTYPE_RGMII_ID)) {
+		if (interface_speed == 1000) {
+			WR4(sc, 0x1c18, 0x1); /*0x1c18*/
+			WR4(sc, 0x1c1c, 0x0); /*0x1c1c*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x1); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x0); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x0); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x0); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x1); /*0x1c34*/
+			WR4(sc, 0x1c38, 0x0); /*0x1c38*/
+			WR4(sc, 0x1c48, 0x1); /*0x1c48*/
+			WR4(sc, 0x1c80, 0x1); /*0x1c80*/
+			WR4(sc, 0x1c84, 0x0); /*0x1c84*/
+		} else if (interface_speed == 100) {
+			WR4(sc, 0x1c18, 0x1); /*0x1c18*/
+			WR4(sc, 0x1c1c, 0x0); /*0x1c1c*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x1); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x0); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x0); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x0); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x1); /*0x1c34*/
+			WR4(sc, 0x1c38, 0x0); /*0x1c38*/
+			WR4(sc, 0x1c48, 0x1); /*0x1c48*/
+			WR4(sc, 0x1c80, 0x0); /*0x1c80*/
+			WR4(sc, 0x1c84, 0x0); /*0x1c84*/
+		} else {
+			WR4(sc, 0x1c18, 0x1); /*0x1c18*/
+			WR4(sc, 0x1c1c, 0x0); /*0x1c1c*/
+			WR4(sc, 0x1c20, 0x0); /*0x1c20*/
+			WR4(sc, 0x1c24, 0x1); /*0x1c24*/
+			WR4(sc, 0x1c28, 0x0); /*0x1c28*/
+			WR4(sc, 0x1c2c, 0x0); /*0x1c2c*/
+			WR4(sc, 0x1c30, 0x0); /*0x1c30*/
+			WR4(sc, 0x1c34, 0x1); /*0x1c34*/
+			WR4(sc, 0x1c38, 0x1); /*0x1c38*/
+			WR4(sc, 0x1c48, 0x1); /*0x1c48*/
+			WR4(sc, 0x1c80, 0x0); /*0x1c80*/
+			WR4(sc, 0x1c84, 0x0); /*0x1c84*/
+		}
+	} else if (interface_type == MII_CONTYPE_RMII) {
+		WR4(sc, 0x1c48, 0x1); /*0x1c48*/
+	}
+
+	if (interface_speed == 100)
+		set_speed = 0;
+	else if (interface_speed == 1000)
+		set_speed = 1;
+	else if (interface_speed == 2500)
+		set_speed = 2;
+	else if (interface_speed == 5000)
+		set_speed = 3;
+	else if (interface_speed == 10000)
+		set_speed = 4;
+
+	/* GEM_HSMAC(0x0050) provide rate to the external */
+	reg_value = RD4(sc, CGEM_HSMAC);
+	reg_value &= ~CGEM_HSMACSPEED_MASK;
+	reg_value |= (set_speed)&CGEM_HSMACSPEED_MASK;
+	WR4(sc, CGEM_HSMAC, reg_value);
+
+	return 0;
+}
+
+static int
+cgem_2p0_set_ref_clk(struct cgem_softc *sc, int interface_type,
+    int interface_speed)
+{
+	uint32_t reg_value;
+	uint32_t set_speed = 0;
+
+	if (interface_type == MII_CONTYPE_SGMII) {
+		if (interface_speed == 100 ||
+		    interface_speed == 10) {
+			WR4(sc, 0x1c04, 0x1); /*0x1c04*/
+			WR4(sc, 0x1c0c, 0x1); /*0x1c0c*/
+		}
+	}
+
+	if (interface_speed == 100)
+		set_speed = 0;
+	else if (interface_speed == 1000)
+		set_speed = 1;
+	else if (interface_speed == 2500)
+		set_speed = 2;
+
+	/* GEM_HSMAC(0x0050) provide rate to the external */
+	reg_value = RD4(sc, CGEM_HSMAC);
+	reg_value &= ~CGEM_HSMACSPEED_MASK;
+	reg_value |= (set_speed)&CGEM_HSMACSPEED_MASK;
+	WR4(sc, CGEM_HSMAC, reg_value);
+
+	return 0;
+}
+
 /* Call to set reference clock and network config bits according to media. */
 static void
-cgem_mediachange(struct cgem_softc *sc,	struct mii_data *mii)
+cgem_mediachange(struct cgem_softc *sc, struct mii_data *mii)
 {
-	int ref_clk_freq;
+	int interface_speed = 1000;
 
 	CGEM_ASSERT_LOCKED(sc);
 
@@ -1484,14 +1750,14 @@ cgem_mediachange(struct cgem_softc *sc,	struct mii_data *mii)
 	case IFM_1000_T:
 		sc->net_cfg_shadow |= (CGEM_NET_CFG_SPEED100 |
 		    CGEM_NET_CFG_GIGE_EN);
-		ref_clk_freq = 125000000;
+		interface_speed = 1000;
 		break;
 	case IFM_100_TX:
 		sc->net_cfg_shadow |= CGEM_NET_CFG_SPEED100;
-		ref_clk_freq = 25000000;
+		interface_speed = 100;
 		break;
 	default:
-		ref_clk_freq = 2500000;
+		break;
 	}
 
 	if ((mii->mii_media_active & IFM_FDX) != 0)
@@ -1499,13 +1765,15 @@ cgem_mediachange(struct cgem_softc *sc,	struct mii_data *mii)
 
 	WR4(sc, CGEM_NET_CFG, sc->net_cfg_shadow);
 
-	if (sc->clk_pclk != NULL) {
-		CGEM_UNLOCK(sc);
-		if (clk_set_freq(sc->clk_pclk, ref_clk_freq, 0))
-			device_printf(sc->dev, "could not set ref clk to %d\n",
-			    ref_clk_freq);
-		CGEM_LOCK(sc);
+	/* Set the reference clock if necessary. */
+	CGEM_UNLOCK(sc);
+	if (cgem_1p0_set_ref_clk(sc, sc->phy_contype, interface_speed)) {
+		device_printf(sc->dev,
+			"cgem_mediachange(firefly): "
+			"could not set ref clk for speed %d.\n",
+			interface_speed);
 	}
+	CGEM_LOCK(sc);
 
 	sc->mii_media_active = mii->mii_media_active;
 }
@@ -1896,7 +2164,9 @@ static int
 cgem_detach(device_t dev)
 {
 	struct cgem_softc *sc = device_get_softc(dev);
+#ifndef __rtems__
 	int i;
+#endif /* __rtems__ */
 
 	if (sc == NULL)
 		return (ENODEV);
@@ -1932,8 +2202,10 @@ cgem_detach(device_t dev)
 	/* Release DMA resources. */
 	if (sc->rxring != NULL) {
 		if (sc->rxring_physaddr != 0) {
+#ifndef __rtems__
 			bus_dmamap_unload(sc->desc_dma_tag,
 			    sc->rxring_dma_map);
+#endif /* __rtems__ */
 			sc->rxring_physaddr = 0;
 			sc->txring_physaddr = 0;
 			sc->null_qs_physaddr = 0;
@@ -1944,6 +2216,7 @@ cgem_detach(device_t dev)
 		sc->txring = NULL;
 		sc->null_qs = NULL;
 
+#ifndef __rtems__
 		for (i = 0; i < CGEM_NUM_RX_DESCS; i++)
 			if (sc->rxring_m_dmamap[i] != NULL) {
 				bus_dmamap_destroy(sc->mbuf_dma_tag,
@@ -1956,6 +2229,7 @@ cgem_detach(device_t dev)
 				    sc->txring_m_dmamap[i]);
 				sc->txring_m_dmamap[i] = NULL;
 			}
+#endif /* __rtems__ */
 	}
 	if (sc->desc_dma_tag != NULL) {
 		bus_dma_tag_destroy(sc->desc_dma_tag);
@@ -1984,7 +2258,7 @@ cgem_detach(device_t dev)
 	return (0);
 }
 
-static device_method_t cgem_methods[] = {
+static device_method_t xmac_methods[] = {
 	/* Device interface */
 	DEVMETHOD(device_probe,		cgem_probe),
 	DEVMETHOD(device_attach,	cgem_attach),
@@ -1999,14 +2273,14 @@ static device_method_t cgem_methods[] = {
 	DEVMETHOD_END
 };
 
-static driver_t cgem_driver = {
-	"cgem",
-	cgem_methods,
+static driver_t xmac_driver = {
+	"xmac",
+	xmac_methods,
 	sizeof(struct cgem_softc),
 };
 
-DRIVER_MODULE(cgem, simplebus, cgem_driver, NULL, NULL);
-DRIVER_MODULE(miibus, cgem, miibus_driver, NULL, NULL);
-MODULE_DEPEND(cgem, miibus, 1, 1, 1);
-MODULE_DEPEND(cgem, ether, 1, 1, 1);
+DRIVER_MODULE(xmac, simplebus, xmac_driver, NULL, NULL);
+DRIVER_MODULE(miibus, xmac, miibus_driver, NULL, NULL);
+MODULE_DEPEND(xmac, miibus, 1, 1, 1);
+MODULE_DEPEND(xmac, ether, 1, 1, 1);
 SIMPLEBUS_PNP_INFO(compat_data);

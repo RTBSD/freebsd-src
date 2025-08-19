@@ -1,0 +1,291 @@
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/ {
+	compatible = "firefly,dsk_v1";
+	interrupt-parent = <&gic>;
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	aliases {
+		ethernet0 = &gmac0;
+		ethernet1 = &gmac1;
+	};
+
+	psci {
+		compatible   = "arm,psci-1.0";
+		method       = "smc";
+		cpu_suspend  = <0xc4000001>;
+		cpu_off      = <0x84000002>;
+		cpu_on       = <0xc4000003>;
+		sys_poweroff = <0x84000008>;
+		sys_reset    = <0x84000009>;
+	};
+
+	cpus {
+		#address-cells = <0x2>;
+		#size-cells = <0x0>;
+
+		cpu0: cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x0>;
+			enable-method = "psci";
+			numa-node-id = <0>;
+		};
+
+		cpu1: cpu@1 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x1>;
+			enable-method = "psci";
+			numa-node-id = <0>;
+		};
+
+		cpu2: cpu@100 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x100>;
+			enable-method = "psci";
+			numa-node-id = <0>;
+		};
+
+		cpu3: cpu@101 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x101>;
+			enable-method = "psci";
+			numa-node-id = <0>;
+		};
+
+		cpu4: cpu@200 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x200>;
+			enable-method = "psci";
+			numa-node-id = <0>;
+		};
+
+		cpu5: cpu@201 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x201>;
+			enable-method = "psci";
+			numa-node-id = <0>;
+		};
+
+		cpu6: cpu@300 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x300>;
+			enable-method = "psci";
+			numa-node-id = <0>;
+		};
+
+		cpu7: cpu@301 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x301>;
+			enable-method = "psci";
+			numa-node-id = <0>;
+		};
+	};
+
+	gic: interrupt-controller@29900000 {
+		compatible = "arm,gic-v3";
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		reg = <0x0 0x29a00000 0 0x20000>,       /* GICD */
+		      <0x0 0x29b00000 0 0x100000>,       /* GICR */
+		      <0x0 0x29c00000 0 0x10000>,       /* GICC */
+		      <0x0 0x29c10000 0 0x10000>,       /* GICH */
+		      <0x0 0x29c20000 0 0x10000>;       /* GICV */
+		interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
+
+		its: gic-its@29920000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			reg = <0x0 0x29a20000 0x0 0x20000>;
+		};
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW>;
+		clock-frequency = <48000000>;
+	};
+
+	pmu {
+		compatible = "arm,armv8-pmuv3";
+		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW>;
+	};
+
+	clocks {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		clk250mhz: clk250mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <250000000>;
+		};
+
+		sysclk_48mhz: clk48mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <48000000>;
+		};
+
+		sysclk_600mhz: clk600mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <600000000>;
+		};
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		dma-coherent;
+		ranges;
+
+		uart0: uart@28000000 {
+			compatible = "arm,pl011", "arm,primecell";
+			reg = <0x0 0x28000000 0x0 0x1000>;
+			baud = <115200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			interrupts = <GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysclk_48mhz &sysclk_48mhz>;
+			clock-names = "uartclk", "apb_pclk";
+		};
+
+		uart1: uart@28001000 {
+			compatible = "arm,pl011", "arm,primecell";
+			reg = <0x0 0x28001000 0x0 0x1000>;
+			baud = <115200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			interrupts = <GIC_SPI 7 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysclk_48mhz &sysclk_48mhz>;
+			clock-names = "uartclk", "apb_pclk";
+		};
+
+		uart2: uart@28002000 {
+			compatible = "arm,pl011", "arm,primecell";
+			reg = <0x0 0x28002000 0x0 0x1000>;
+			baud = <115200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysclk_48mhz &sysclk_48mhz>;
+			clock-names = "uartclk", "apb_pclk";
+		};
+
+		uart3: uart@28003000 {
+			compatible = "arm,pl011", "arm,primecell";
+			reg = <0x0 0x28003000 0x0 0x1000>;
+			baud = <115200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			interrupts = <GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysclk_48mhz &sysclk_48mhz>;
+			clock-names = "uartclk", "apb_pclk";
+		};
+
+		watchdog0: watchdog@2800a000 {
+			compatible = "arm,sbsa-gwdt";
+			reg = <0x0 0x2800b000 0x0 0x1000>,
+			      <0x0 0x2800a000 0x0 0x1000>;
+			interrupts = <GIC_SPI 16 IRQ_TYPE_LEVEL_HIGH>;
+			timeout-sec = <30>;
+		};
+
+		watchdog1: watchdog@28016000 {
+			compatible = "arm,sbsa-gwdt";
+			reg = <0x0 0x28017000 0x0 0x1000>,
+			      <0x0 0x28016000 0x0 0x1000>;
+			interrupts = <GIC_SPI 17 IRQ_TYPE_LEVEL_HIGH>;
+			timeout-sec = <30>;
+		};
+
+		i2c0: i2c@28006000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x28006000 0x0 0x1000>;
+			interrupts = <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysclk_48mhz>;
+			status = "disabled";
+		};
+
+		i2c1: i2c@28007000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x28007000 0x0 0x1000>;
+			interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysclk_48mhz>;
+			status = "disabled";
+		};
+
+		i2c2: i2c@28008000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x28008000 0x0 0x1000>;
+			interrupts = <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysclk_48mhz>;
+			status = "disabled";
+		};
+
+		i2c3: i2c@28009000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x28009000 0x0 0x1000>;
+			interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysclk_48mhz>;
+			status = "disabled";
+		};
+
+		gmac0: eth@2820c000 {
+			compatible = "firefly,gmac";
+			reg = <0x0 0x2820c000 0x0 0x2000>;
+			interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
+			ref-clock-num = <0>;
+			status = "disabled";
+		};
+
+		gmac1: eth@28210000 {
+			compatible = "firefly,gmac";
+			reg = <0x0 0x28210000 0x0 0x2000>;
+			interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>;
+			ref-clock-num = <0>;
+			status = "disabled";
+		};
+
+		pcie: pcie {
+			compatible = "pci-host-ecam-generic";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			#interrupt-cells = <1>;
+			reg = <0x0 0x40000000 0x0 0x10000000>;
+			msi-parent = <&its>;
+			bus-range = <0x0 0xff>;
+			interrupt-map-mask = <0x0 0x0 0x0 0x7>;
+			/*interrupt-map = <0x0 0x0 0x0 0x1 &ixic 0x0 0x0 GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>,
+					<0x0 0x0 0x0 0x2 &ixic 0x0 0x0 GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>,
+					<0x0 0x0 0x0 0x3 &ixic 0x0 0x0 GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>,
+					<0x0 0x0 0x0 0x4 &ixic 0x0 0x0 GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;*/
+			interrupt-map = <0x0 0x0 0x0 0x1 &gic 0x0 0x0 GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>,
+					<0x0 0x0 0x0 0x2 &gic 0x0 0x0 GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>,
+					<0x0 0x0 0x0 0x3 &gic 0x0 0x0 GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>,
+					<0x0 0x0 0x0 0x4 &gic 0x0 0x0 GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
+			ranges = <0x01000000  0x0 0x00000000  0x0 0x50000000  0x0 0x00f00000>,
+				 <0x02000000  0x0 0x58000000  0x0 0x58000000  0x0 0x28000000>,
+				 <0x03000000 0x10 0x00000000 0x10 0x00000000 0x10 0x00000000>;
+		};
+	};
+};

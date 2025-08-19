@@ -64,6 +64,8 @@ static int dbg_setup_watchpoint(struct debug_monitor_state *, vm_offset_t,
     vm_size_t, enum dbg_access_t);
 static int dbg_remove_watchpoint(struct debug_monitor_state *, vm_offset_t,
     vm_size_t);
+static int dbg_find_free_slot(struct debug_monitor_state *, enum dbg_t);
+static int dbg_find_slot(struct debug_monitor_state *, enum dbg_t, vm_offset_t);
 
 /* Called from the exception handlers */
 void dbg_monitor_enter(struct thread *);
@@ -269,6 +271,72 @@ kdb_cpu_clr_watchpoint(vm_offset_t addr, vm_size_t size)
 {
 
 	return (dbg_remove_watchpoint(NULL, addr, size));
+}
+
+int
+kdb_cpu_set_hwbreakpoint(vm_offset_t addr, vm_size_t size)
+{
+	uint64_t bcr_size, bcr_priv;
+	int i;
+
+	i = dbg_find_free_slot(&kernel_monitor, DBG_TYPE_BREAKPOINT);
+	if (i == -1) {
+		printf("Can not find slot for breakpoint, max %d"
+		    " breakpoints supported\n", dbg_breakpoint_num);
+		return (EBUSY);
+	}
+
+	switch(size) {
+	case 1:
+		bcr_size = DBG_WATCH_CTRL_LEN_1;
+		break;
+	case 2:
+		bcr_size = DBG_WATCH_CTRL_LEN_2;
+		break;
+	case 4:
+		bcr_size = DBG_WATCH_CTRL_LEN_4;
+		break;
+	case 8:
+		bcr_size = DBG_WATCH_CTRL_LEN_8;
+		break;
+	default:
+		printf("Unsupported address size for breakpoint: %zu", size);
+		return (EINVAL);
+	}
+
+	bcr_priv = DBG_WB_CTRL_EL1;
+
+	kernel_monitor.dbg_bvr[i] = addr;
+	/* E, bit[0]: Enable breakpoint n, 1
+	   PMC, bit[2:1]: Privilege mode control, EL1
+	   BAS, bit[12:5]: Byte address select*/
+	kernel_monitor.dbg_bcr[i] = bcr_size | bcr_priv | DBG_WB_CTRL_E;
+	kernel_monitor.dbg_enable_count++;
+	kernel_monitor.dbg_flags |= DBGMON_ENABLED;
+
+	dbg_register_sync(&kernel_monitor);
+	return (0);
+}
+
+int
+kdb_cpu_clr_hwbreakpoint(vm_offset_t addr, vm_size_t size)
+{
+	int i;
+
+	i = dbg_find_slot(&kernel_monitor, DBG_TYPE_BREAKPOINT, addr);
+	if (i == -1) {
+		printf("Can not find breakpoint for address 0%lx\n", addr);
+		return (EINVAL);
+	}
+
+	kernel_monitor.dbg_bvr[i] = 0;
+	kernel_monitor.dbg_bcr[i] = 0;
+	kernel_monitor.dbg_enable_count--;
+	if (kernel_monitor.dbg_enable_count == 0)
+		kernel_monitor.dbg_flags &= ~DBGMON_ENABLED;
+
+	dbg_register_sync(&kernel_monitor);
+	return (0);
 }
 #endif /* DDB || GDB */
 
