@@ -684,7 +684,7 @@ arm64/rockchip/rk_pwm.c				optional fdt rk_pwm
 arm64/rockchip/rk_pcie.c			optional fdt pci soc_rockchip_rk3399
 arm64/rockchip/rk_pcie_phy.c			optional fdt pci soc_rockchip_rk3399
 arm64/firefly/if_gmac.c			optional fdt soc_firefly_v1
-arm64/firefly/if_xmac.c			optional fdt soc_firefly_v2
+arm64/firefly/if_xmac.c			optional fdt soc_firefly_v2 | soc_firefly_v3
 
 # RockChip Clock support
 arm64/rockchip/clk/rk_cru.c			optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399 | fdt soc_rockchip_rk3568

@@ -1,0 +1,48 @@
+/dts-v1/;
+/memreserve/ 0x80000000 0x10000;
+
+#include "firefly_v3.dtsi"
+
+/{
+	model = "Firefly Development Board v3";
+	compatible = "firefly,dsk_v3";
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	chosen {
+		stdout-path = "uart1:115200n8";
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x00 0x80000000 0x00 0x7b000000>;
+	};
+};
+
+&uart1 {
+	status = "ok";
+};
+
+&uart0 {
+	status = "ok";
+};
+
+&macb0 {
+	phy-mode = "sgmii";
+	use-mii;
+	status = "ok";
+};
+
+&macb1 {
+	phy-mode = "sgmii";
+	use-mii;
+	status = "ok";
+};
+
+&sata0 {
+	status = "okay";
+};
+
+&pcie {
+	status = "okay";
+};

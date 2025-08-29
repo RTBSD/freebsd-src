@@ -1,7 +1,7 @@
 /dts-v1/;
 /memreserve/ 0x80000000 0x10000;
 
-#include "firefly_dsk_v1.dtsi"
+#include "firefly_v1.dtsi"
 
 /{
 	model = "Firefly Development Board v1";

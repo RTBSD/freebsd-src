@@ -372,6 +372,9 @@
 #define CGEM_TX_QBAR_HI			0x4C8
 #define CGEM_RX_QBAR_HI			0x4D4
 
+#define CGEM_TAIL(hw_q)		   (0x0E80 + ((hw_q) << 2))
+#define CGEM_TAIL_ENABLE		0x0E7C /* Enable tail */
+
 /*
  * Transmit Descriptors:  two or four 32-bit words:
  *	word0: address

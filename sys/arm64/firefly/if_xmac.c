@@ -107,9 +107,11 @@
 #define HWQUIRK_NONE		0
 #define HWQUIRK_NEEDNULLQS	1
 #define HWQUIRK_RXHANGWAR	2
+#define HWQUIRK_VERSION2    4
 
 static struct ofw_compat_data compat_data[] = {
 	{ "firefly,xmac",			HWQUIRK_NEEDNULLQS },
+	{ "firefly,xmac_v2",		HWQUIRK_VERSION2 },
 	{ NULL,				0 }
 };
 
@@ -118,6 +120,7 @@ struct cgem_softc {
 	struct mtx		sc_mtx;
 	device_t		dev;
 	device_t		miibus;
+	u_int			version;
 	u_int			mii_media_active;	/* last active media */
 	int			if_old_flags;
 	struct resource		*mem_res;
@@ -493,6 +496,10 @@ cgem_setup_descs(struct cgem_softc *sc)
 	sc->txring_hd_ptr = 0;
 	sc->txring_tl_ptr = 0;
 	sc->txring_queued = 0;
+
+	if (sc->version == 2) {
+		WR4(sc, CGEM_TAIL(0), (1U << 31) | 0U);
+	}
 
 	if (sc->neednullqs) {
 		sc->null_qs = (void *)(sc->txring + CGEM_NUM_TX_DESCS);
@@ -957,6 +964,11 @@ cgem_start_locked(if_t ifp)
 			sc->txring_hd_ptr += nsegs;
 		sc->txring_queued += nsegs;
 
+		if (sc->version == 2) {
+			WR4(sc, CGEM_TAIL(0),
+				(1U << 31) | ((sc->txring_hd_ptr) & (CGEM_NUM_TX_DESCS - 1)));
+		}
+
 		/* Kick the transmitter. */
 		WR4(sc, CGEM_NET_CTRL, sc->net_ctl_shadow |
 		    CGEM_NET_CTRL_START_TX);
@@ -1188,6 +1200,10 @@ cgem_reset(struct cgem_softc *sc)
 
 	sc->net_ctl_shadow = CGEM_NET_CTRL_MGMT_PORT_EN;
 	WR4(sc, CGEM_NET_CTRL, sc->net_ctl_shadow);
+
+	if (sc->version == 2) {
+		WR4(sc, CGEM_TAIL_ENABLE, 0x80000001);
+	}
 }
 
 /* Bring up the hardware. */
@@ -1711,19 +1727,12 @@ cgem_2p0_set_ref_clk(struct cgem_softc *sc, int interface_type,
 	uint32_t set_speed = 0;
 
 	if (interface_type == MII_CONTYPE_SGMII) {
-		if (interface_speed == 100 ||
-		    interface_speed == 10) {
-			WR4(sc, 0x1c04, 0x1); /*0x1c04*/
-			WR4(sc, 0x1c0c, 0x1); /*0x1c0c*/
+		if (interface_speed == 1000) {
+			set_speed = 1; /* HS_SPEED_1000M */
+		} else if ((interface_speed == 100) || (interface_speed == 10)) {
+			set_speed = 0; /* HS_SPEED_100M */
 		}
 	}
-
-	if (interface_speed == 100)
-		set_speed = 0;
-	else if (interface_speed == 1000)
-		set_speed = 1;
-	else if (interface_speed == 2500)
-		set_speed = 2;
 
 	/* GEM_HSMAC(0x0050) provide rate to the external */
 	reg_value = RD4(sc, CGEM_HSMAC);
@@ -1767,11 +1776,23 @@ cgem_mediachange(struct cgem_softc *sc, struct mii_data *mii)
 
 	/* Set the reference clock if necessary. */
 	CGEM_UNLOCK(sc);
-	if (cgem_1p0_set_ref_clk(sc, sc->phy_contype, interface_speed)) {
-		device_printf(sc->dev,
-			"cgem_mediachange(firefly): "
-			"could not set ref clk for speed %d.\n",
-			interface_speed);
+	if (sc->version == 1) {
+		if (cgem_1p0_set_ref_clk(sc, sc->phy_contype, interface_speed)) {
+			device_printf(sc->dev,
+				"cgem_mediachange(v1): "
+				"could not set ref clk for speed %d.\n",
+				interface_speed);
+		}
+	} else if (sc->version == 2) {
+		if (cgem_2p0_set_ref_clk(sc, sc->phy_contype,
+		    interface_speed)) {
+			device_printf(sc->dev,
+			    "cgem_mediachange(v2): "
+			    "could not set ref clk for speed %d.\n",
+			    interface_speed);
+		}
+	} else {
+		panic("cgem_mediachange: unknown version");
 	}
 	CGEM_LOCK(sc);
 
@@ -2014,6 +2035,10 @@ cgem_attach(device_t dev)
 		sc->neednullqs = 1;
 	if ((hwquirks & HWQUIRK_RXHANGWAR) != 0)
 		sc->rxhangwar = 1;
+	if ((hwquirks & HWQUIRK_VERSION2) != 0)
+		sc->version = 2;
+	else
+		sc->version = 1;
 	/*
 	 * Both pclk and hclk are mandatory but we don't have a proper
 	 * clock driver for Zynq so don't make it fatal if we can't

@@ -5,6 +5,7 @@
 # SoC support
 options 	SOC_FIREFLY_V1
 options 	SOC_FIREFLY_V2
+options 	SOC_FIREFLY_V3
 
 
 # DTBs
