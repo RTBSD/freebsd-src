@@ -247,7 +247,7 @@ ieee80211_chan_init(struct ieee80211com *ic)
 
 	/*
 	 * Set auto mode to reset active channel state and any desired channel.
-	 */
+	 */ // change the mode of the driver's PHY
 	(void) ieee80211_setmode(ic, IEEE80211_MODE_AUTO);
 #undef DEFAULTRATES
 }
@@ -549,7 +549,7 @@ ieee80211_vap_setup(struct ieee80211com *ic, struct ieee80211vap *vap,
 {
 	struct ifnet *ifp;
 
-	ifp = if_alloc(IFT_ETHER);
+	ifp = if_alloc(IFT_ETHER); // allocate and init ifnet
 	if_initname(ifp, name, unit);
 	ifp->if_softc = vap;			/* back pointer */
 	ifp->if_flags = IFF_SIMPLEX | IFF_BROADCAST | IFF_MULTICAST;

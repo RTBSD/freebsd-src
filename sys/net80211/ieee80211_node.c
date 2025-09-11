@@ -126,7 +126,10 @@ ieee80211_node_attach(struct ieee80211com *ic)
 	ic->ic_node_alloc = node_alloc;
 	ic->ic_node_init = node_init;
 	ic->ic_node_free = node_free;
+	// Cleanup state   in   a   ieee80211_node	 created    by ic_node_alloc
 	ic->ic_node_cleanup = node_cleanup;
+	// The	default  method ages frames on	the power-save queue (in AP mode) 
+	//    and pending frames in the  receive  re-order queues (for stations using A-MPDU)
 	ic->ic_node_age = node_age;
 	ic->ic_node_drain = node_age;		/* NB: same as age */
 	ic->ic_node_getrssi = node_getrssi;

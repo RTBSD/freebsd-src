@@ -76,7 +76,7 @@ void
 rtwn_cmdq_init(struct rtwn_softc *sc)
 {
 	RTWN_CMDQ_LOCK_INIT(sc);
-	TASK_INIT(&sc->cmdq_task, 0, rtwn_cmdq_cb, sc);
+	TASK_INIT(&sc->cmdq_task, 0, rtwn_cmdq_cb, sc); // task queue
 }
 
 void

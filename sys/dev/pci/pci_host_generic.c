@@ -84,7 +84,7 @@ pci_host_generic_core_attach(device_t dev)
 	struct resource_map map;
 #endif
 	struct generic_pcie_core_softc *sc;
-	struct rman *rm;
+	struct rman *rm; // region descriptor
 	uint64_t phys_base;
 	uint64_t pci_base;
 	uint64_t size;
@@ -97,18 +97,18 @@ pci_host_generic_core_attach(device_t dev)
 	sc->dev = dev;
 
 	/* Create the parent DMA tag to pass down the coherent flag */
-	error = bus_dma_tag_create(bus_get_dma_tag(dev), /* parent */
-	    1, 0,				/* alignment, bounds */
+	error = bus_dma_tag_create(bus_get_dma_tag(dev), /* parent */ // (5.0) get parent dma tag
+	    1, 0,				/* alignment, bounds */ // no aligment or boundary limits
 	    BUS_SPACE_MAXADDR,			/* lowaddr */
-	    BUS_SPACE_MAXADDR,			/* highaddr */
+	    BUS_SPACE_MAXADDR,			/* highaddr */ // no address limits
 	    NULL, NULL,				/* filter, filterarg */
 	    BUS_SPACE_MAXSIZE,			/* maxsize */
-	    BUS_SPACE_UNRESTRICTED,		/* nsegments */
-	    BUS_SPACE_MAXSIZE,			/* maxsegsize */
-	    sc->coherent ? BUS_DMA_COHERENT : 0, /* flags */
+	    BUS_SPACE_UNRESTRICTED,		/* nsegments */ // no restricions on scatter/gather DMA
+	    BUS_SPACE_MAXSIZE,			/* maxsegsize */ // no limits on segment size
+	    sc->coherent ? BUS_DMA_COHERENT : 0, /* flags */ // may need bus_dmamap_sync()
 	    NULL, NULL,				/* lockfunc, lockarg */
-	    &sc->dmat);
-	if (error != 0)
+	    &sc->dmat); // restore the created DMA tag
+	if (error != 0) // (5) create parent DMA tag to settel DMA rules
 		return (error);
 
 	/*
@@ -119,9 +119,9 @@ pci_host_generic_core_attach(device_t dev)
 		(void)bus_dma_tag_set_domain(sc->dmat, domain);
 
 	if ((sc->quirks & PCIE_CUSTOM_CONFIG_SPACE_QUIRK) == 0) {
-		rid = 0;
+		rid = 0; // (5.1) allocate hardware resource (MMIO)
 		sc->res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &rid,
-		    PCI_RF_FLAGS | RF_ACTIVE);
+		    PCI_RF_FLAGS | RF_ACTIVE); // resouce id stored in rid, e.g, 1 = BAR1, RF_ACTIVE, resource is usable after allocated
 		if (sc->res == NULL) {
 			device_printf(dev, "could not allocate memory.\n");
 			error = ENXIO;
@@ -143,21 +143,21 @@ pci_host_generic_core_attach(device_t dev)
 	sc->has_pmem = false;
 	sc->pmem_rman.rm_type = RMAN_ARRAY;
 	snprintf(buf, sizeof(buf), "%s prefetch window",
-	    device_get_nameunit(dev));
-	sc->pmem_rman.rm_descr = strdup(buf, M_DEVBUF);
+	    device_get_nameunit(dev)); // name of this resource
+	sc->pmem_rman.rm_descr = strdup(buf, M_DEVBUF); // prefetch mem
 
 	sc->mem_rman.rm_type = RMAN_ARRAY;
 	snprintf(buf, sizeof(buf), "%s memory window",
 	    device_get_nameunit(dev));
-	sc->mem_rman.rm_descr = strdup(buf, M_DEVBUF);
+	sc->mem_rman.rm_descr = strdup(buf, M_DEVBUF); // normal mem, MMIO
 
 	sc->io_rman.rm_type = RMAN_ARRAY;
 	snprintf(buf, sizeof(buf), "%s I/O port window",
 	    device_get_nameunit(dev));
-	sc->io_rman.rm_descr = strdup(buf, M_DEVBUF);
+	sc->io_rman.rm_descr = strdup(buf, M_DEVBUF); // io port
 
 	/* Initialize rman and allocate memory regions */
-	error = rman_init(&sc->pmem_rman);
+	error = rman_init(&sc->pmem_rman); // (5.2) resource management init
 	if (error) {
 		device_printf(dev, "rman_init() failed. error = %d\n", error);
 		goto err_pmem_rman;
@@ -175,7 +175,7 @@ pci_host_generic_core_attach(device_t dev)
 		goto err_io_rman;
 	}
 
-	for (tuple = 0; tuple < MAX_RANGES_TUPLES; tuple++) {
+	for (tuple = 0; tuple < MAX_RANGES_TUPLES; tuple++) { // (5.3) iter a serial of pcie space
 		phys_base = sc->ranges[tuple].phys_base;
 		pci_base = sc->ranges[tuple].pci_base;
 		size = sc->ranges[tuple].size;
@@ -206,6 +206,7 @@ pci_host_generic_core_attach(device_t dev)
 			device_printf(dev,
 			    "PCI addr: 0x%jx, CPU addr: 0x%jx, Size: 0x%jx, Type: %s\n",
 			    pci_base, phys_base, size, range_descr);
+		// associate a definite	resource with a	given resource id
 		error = bus_set_resource(dev, SYS_RES_MEMORY, rid, phys_base,
 		    size);
 		if (error != 0) {
@@ -215,6 +216,10 @@ pci_host_generic_core_attach(device_t dev)
 			continue;
 		}
 		sc->ranges[tuple].rid = rid;
+		// dev: device that requests ownweship of the reource
+		// type: wants to allocate I/O memory
+		// rid: handle that identifies the resource being allocated
+		// flags: activate resource atomically and do not establish implicit mapping
 		sc->ranges[tuple].res = bus_alloc_resource_any(dev,
 		    SYS_RES_MEMORY, &rid, RF_ACTIVE | RF_UNMAPPED | flags);
 		if (sc->ranges[tuple].res == NULL) {
@@ -222,6 +227,8 @@ pci_host_generic_core_attach(device_t dev)
 			    "failed to allocate resource for range %d\n", tuple);
 			continue;
 		}
+		// establishes the concept of a region which is under rman control
+		//   boundary [pci_base, pci_base + size - 1]
 		error = rman_manage_region(rm, pci_base, pci_base + size - 1);
 		if (error) {
 			device_printf(dev, "rman_manage_region() failed."
@@ -280,7 +287,7 @@ pci_host_generic_core_detach(device_t dev)
 			    sc->ranges[tuple].res);
 		bus_delete_resource(dev, SYS_RES_MEMORY, rid);
 	}
-	rman_fini(&sc->io_rman);
+	rman_fini(&sc->io_rman); // free resouce mangment
 	rman_fini(&sc->mem_rman);
 	rman_fini(&sc->pmem_rman);
 	free(__DECONST(char *, sc->io_rman.rm_descr), M_DEVBUF);

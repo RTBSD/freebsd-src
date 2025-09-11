@@ -112,5 +112,5 @@ static const struct ieee80211_ratectl none = {
 	.ir_tx_update	= none_tx_update,
 	.ir_setinterval	= none_setinterval,
 };
-IEEE80211_RATECTL_MODULE(ratectl_none, 1);
+IEEE80211_RATECTL_MODULE(ratectl_none, 1); // module wlan_ratectl_none
 IEEE80211_RATECTL_ALG(none, IEEE80211_RATECTL_NONE, none);

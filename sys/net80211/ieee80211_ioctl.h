@@ -598,8 +598,14 @@ struct ieee80211req {
 #define	SIOCG80211		_IOWR('i', 235, struct ieee80211req)
 #define	SIOCG80211STATS		_IOWR('i', 236, struct ifreq)
 
+// Returns the requested SSID by copying it
+//   into the buffer pointed to by i_data and
+//   setting i_len to the length.  If i_val is
+//   >= 0 then the request refers to the configured
 #define IEEE80211_IOC_SSID		1
+// Returns the number of SSIDs this card supports., is 1 in most cases
 #define IEEE80211_IOC_NUMSSIDS		2
+// Returns the current WEP status in i_val.
 #define IEEE80211_IOC_WEP		3
 #define 	IEEE80211_WEP_NOSUP	-1
 #define 	IEEE80211_WEP_OFF	0

@@ -73,7 +73,7 @@ rtwn_fw_loadpage(struct rtwn_softc *sc, int page, const uint8_t *buf,
 			mlen = 4;
 		else
 			mlen = 1;
-		error = rtwn_fw_write_block(sc, buf, off, mlen);
+		error = rtwn_fw_write_block(sc, buf, off, mlen); // write firmware
 		if (error != 0)
 			break;
 		off += mlen;

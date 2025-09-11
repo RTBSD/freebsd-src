@@ -42,6 +42,7 @@ extern const uint8_t ieee80211broadcastaddr[];
 
 typedef uint16_t ieee80211_seq;
 
+// Physical Layer Convergence Procedure (PLCP) sublayer
 /* IEEE 802.11 PLCP header */
 struct ieee80211_plcp_hdr {
 	uint16_t	i_sfd;
@@ -61,7 +62,8 @@ struct ieee80211_plcp_hdr {
 
 /*
  * generic definitions for IEEE 802.11 frames
- */
+ */ // generic structure of an IEEE 802.11 MAC frame
+// figure 3.1    802.11 MAC Protocol Data Unit (MPDU)
 struct ieee80211_frame {
 	uint8_t		i_fc[2];
 	uint8_t		i_dur[2];
@@ -110,13 +112,18 @@ struct ieee80211_qosframe_addr4 {
 	uint8_t		i_qos[2];
 } __packed;
 
-#define	IEEE80211_FC0_VERSION_MASK		0x03
+// Figure 3.3 Frame Control field
+#define	IEEE80211_FC0_VERSION_MASK		0x03 // Protocol Version Field
 #define	IEEE80211_FC0_VERSION_SHIFT		0
 #define	IEEE80211_FC0_VERSION_0			0x00
-#define	IEEE80211_FC0_TYPE_MASK			0x0c
+#define	IEEE80211_FC0_TYPE_MASK			0x0c // Type and Subtype Fields
 #define	IEEE80211_FC0_TYPE_SHIFT		2
+// 3 major types of frame
+// In Chapters 4, 5, and 6, you will learn about the three major 802.11 frame types:
+//   802.11 management and control frames do not carry upper-layer information.
 #define	IEEE80211_FC0_TYPE_MGT			0x00	/* Management */
 #define	IEEE80211_FC0_TYPE_CTL			0x04	/* Control */
+//	 Only 802.11 data frames carry an MSDU payload in the frame body.
 #define	IEEE80211_FC0_TYPE_DATA			0x08	/* Data */
 #define	IEEE80211_FC0_TYPE_EXT			0x0c	/* Extension */
 
@@ -124,6 +131,8 @@ struct ieee80211_qosframe_addr4 {
 #define	IEEE80211_FC0_SUBTYPE_SHIFT		4
 /* 802.11-2020 Table 9-1-Valid type and subtype combinations */
 /* For type 00 Management (IEEE80211_FC0_TYPE_MGT) */
+// Table 3.2 Valid Type and Subtype combinations
+// Table 4.1 Management frame subtypes
 #define	IEEE80211_FC0_SUBTYPE_ASSOC_REQ		0x00	/* Association Request */
 #define	IEEE80211_FC0_SUBTYPE_ASSOC_RESP	0x10	/* Association Response */
 #define	IEEE80211_FC0_SUBTYPE_REASSOC_REQ	0x20	/* Reassociation Request */
@@ -142,6 +151,7 @@ struct ieee80211_qosframe_addr4 {
 /* 1111 Reserved				0xf0 */
 /* For type 01 Control (IEEE80211_FC0_TYPE_CTL) */
 /* 0000-0001 Reserved				0x00-0x10 */
+// Table 5.1 Control frames: valid Type and Subtype combinations
 #define	IEEE80211_FC0_SUBTYPE_TRIGGER		0x20	/* Trigger, 80211ax-2021 */
 #define	IEEE80211_FC0_SUBTYPE_TACK		0x30	/* TACK */
 #define	IEEE80211_FC0_SUBTYPE_BF_REPORT_POLL	0x40	/* Beamforming Report Poll */
@@ -157,6 +167,7 @@ struct ieee80211_qosframe_addr4 {
 #define	IEEE80211_FC0_SUBTYPE_CF_END		0xe0	/* CF-End */
 #define	IEEE80211_FC0_SUBTYPE_CF_END_ACK	0xf0	/* 1111 Reserved - what was CF_END_ACK? */
 /* For type 10 Data (IEEE80211_FC0_TYPE_DATA) */
+// Table 6.1 Data frames: valid Type and Subtype combinations
 #define	IEEE80211_FC0_SUBTYPE_DATA		0x00	/* Data */
 /* 0001-0011 Reserved				0x10-0x30 */	/* Were: CF_ACK, CF_POLL, CF_ACPL */
 #define	IEEE80211_FC0_SUBTYPE_NODATA		0x40	/* Null */
@@ -209,6 +220,7 @@ struct ieee80211_qosframe_addr4 {
 #define	IEEE80211_IS_QOSDATA(wh) \
 	((wh)->i_fc[0] == IEEE80211_FC0_QOSDATA)
 
+// indicate the flow of 802.11 data frame
 #define	IEEE80211_FC1_DIR_MASK			0x03
 #define	IEEE80211_FC1_DIR_NODS			0x00	/* STA->STA */
 #define	IEEE80211_FC1_DIR_TODS			0x01	/* STA->AP  */
@@ -219,10 +231,15 @@ struct ieee80211_qosframe_addr4 {
 	(((wh)->i_fc[1] & IEEE80211_FC1_DIR_MASK) == IEEE80211_FC1_DIR_DSTODS)
 
 #define	IEEE80211_FC1_MORE_FRAG			0x04
+// Figure 3.10 Retry field
 #define	IEEE80211_FC1_RETRY			0x08
+// Figure 3.12 Power Management field
 #define	IEEE80211_FC1_PWR_MGT			0x10
+// Figure 3.14 More Data field
 #define	IEEE80211_FC1_MORE_DATA			0x20
+// Figure 3.15 Protected Frame field
 #define	IEEE80211_FC1_PROTECTED			0x40
+// Figure 3.16 Order field
 #define	IEEE80211_FC1_ORDER			0x80
 
 #define	IEEE80211_IS_PROTECTED(wh) \
@@ -408,6 +425,7 @@ struct ieee80211_mnf {
 /* 
  * 802.11n Management Action Frames 
  */
+// Figure 4.34 Action frame structure
 /* generic frame format */
 struct ieee80211_action {
 	uint8_t		ia_category;

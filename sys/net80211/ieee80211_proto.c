@@ -275,6 +275,7 @@ ieee80211_proto_attach(struct ieee80211com *ic)
 	max_linkhdr_grow(ALIGN(hdrlen));
 	//ic->ic_protmode = IEEE80211_PROT_CTSONLY;
 
+	// deferred processing
 	TASK_INIT(&ic->ic_parent_task, 0, parent_updown, ic);
 	TASK_INIT(&ic->ic_mcast_task, 0, update_mcast, ic);
 	TASK_INIT(&ic->ic_promisc_task, 0, update_promisc, ic);
@@ -287,7 +288,11 @@ ieee80211_proto_attach(struct ieee80211com *ic)
 		AGGRESSIVE_MODE_SWITCH_HYSTERESIS;
 
 	/* initialize management frame handlers */
+	// Send an 802.11 management frame. using ieee80211 state and passes it
+	//   to the driver through ic_raw_xmit method
 	ic->ic_send_mgmt = ieee80211_send_mgmt;
+	// Transmit a raw 802.11 frame. defaults drops the
+	// frame and generates	a message on the console.
 	ic->ic_raw_xmit = null_raw_xmit;
 
 	ieee80211_adhoc_attach(ic);
@@ -1826,7 +1831,7 @@ parent_updown(void *arg, int npending)
 {
 	struct ieee80211com *ic = arg;
 
-	ic->ic_parent(ic);
+	ic->ic_parent(ic); // rtwn_parent
 }
 
 static void

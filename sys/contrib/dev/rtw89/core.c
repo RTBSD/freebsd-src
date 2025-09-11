@@ -5430,6 +5430,7 @@ struct rtw89_dev *rtw89_alloc_ieee80211_hw(struct device *device,
 	bool support_mlo;
 	bool no_chanctx;
 
+	// load firmare content in firmware->data, and set feature by model in early_fw
 	firmware = rtw89_early_fw_feature_recognize(device, chip, &early_fw, &fw_format);
 
 	ops = kmemdup(&rtw89_ops, sizeof(rtw89_ops), GFP_KERNEL);

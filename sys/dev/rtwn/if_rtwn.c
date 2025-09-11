@@ -157,7 +157,7 @@ static const uint16_t wme2reg[] =
 int
 rtwn_attach(struct rtwn_softc *sc)
 {
-	struct ieee80211com *ic = &sc->sc_ic;
+	struct ieee80211com *ic = &sc->sc_ic; // pre-device has a ieee80211com
 	int error;
 
 	sc->cur_bcnq_id = RTWN_VAP_ID_INVALID;
@@ -169,10 +169,10 @@ rtwn_attach(struct rtwn_softc *sc)
 #endif
 	callout_init(&sc->sc_calib_to, 0);
 	callout_init(&sc->sc_pwrmode_init, 0);
-	mbufq_init(&sc->sc_snd, ifqmaxlen);
+	mbufq_init(&sc->sc_snd, ifqmaxlen); // mbuf used to transfer
 
 	RTWN_LOCK(sc);
-	error = rtwn_read_chipid(sc);
+	error = rtwn_read_chipid(sc); // chech chip id
 	RTWN_UNLOCK(sc);
 	if (error != 0) {
 		device_printf(sc->sc_dev, "unsupported test chip\n");
@@ -208,16 +208,16 @@ rtwn_attach(struct rtwn_softc *sc)
 	device_printf(sc->sc_dev, "MAC/BB %s, RF 6052 %dT%dR\n",
 	    sc->name, sc->ntxchains, sc->nrxchains);
 
-	ic->ic_softc = sc;
+	ic->ic_softc = sc; // backpointer to device instance
 	ic->ic_phytype = IEEE80211_T_OFDM;	/* not only, but not used */
 	ic->ic_opmode = IEEE80211_M_STA;	/* default to BSS mode */
 
-	/* set device capabilities */
+	/* set device capabilities */ // Device/driver capabilities
 	ic->ic_caps =
-		  IEEE80211_C_STA		/* station mode */
-		| IEEE80211_C_MONITOR		/* monitor mode */
-		| IEEE80211_C_IBSS		/* adhoc mode */
-		| IEEE80211_C_HOSTAP		/* hostap mode */
+		  IEEE80211_C_STA		/* station mode */ // station
+		| IEEE80211_C_MONITOR		/* monitor mode */ // monitor
+		| IEEE80211_C_IBSS		/* adhoc mode */ // adhoc
+		| IEEE80211_C_HOSTAP		/* hostap mode */ // hostap
 #if 0	/* TODO: HRPWM register setup */
 #ifndef RTWN_WITHOUT_UCODE
 		| IEEE80211_C_PMGT		/* Station-side power mgmt */
@@ -234,9 +234,10 @@ rtwn_attach(struct rtwn_softc *sc)
 		| IEEE80211_C_FF		/* Atheros fast-frames */
 		;
 
+	// All chips have hardware support for WEP,	AES-CCM	and TKIP encryption.
 	if (sc->sc_hwcrypto != RTWN_CRYPTO_SW) {
 		ic->ic_cryptocaps =
-		    IEEE80211_CRYPTO_WEP |
+		    IEEE80211_CRYPTO_WEP | // Device supports hardware WEP cipher.
 		    IEEE80211_CRYPTO_TKIP |
 		    IEEE80211_CRYPTO_AES_CCM;
 	}
@@ -269,38 +270,58 @@ rtwn_attach(struct rtwn_softc *sc)
 	/* Adjust capabilities. */
 	rtwn_adj_devcaps(sc);
 
-	rtwn_getradiocaps(ic, IEEE80211_CHAN_MAX, &ic->ic_nchans,
-	    ic->ic_channels);
+	rtwn_getradiocaps(ic, IEEE80211_CHAN_MAX, &ic->ic_nchans, // Number of entries in ic_channels.
+	    ic->ic_channels); // Table of channels the device is capable of operating on.
 
 	/* XXX TODO: setup regdomain if R92C_CHANNEL_PLAN_BY_HW bit is set. */
 
-	ieee80211_ifattach(ic);
+	ieee80211_ifattach(ic); // attach the wireles network interface (ic) to 802.11 network stack layer
+	// driver is expected to override
+    //   default callback	functions in the ieee80211com  structure  to  register
+    //   it's  private  routines
+	// Transmit a raw 802.11 frame.
 	ic->ic_raw_xmit = rtwn_raw_xmit;
+	// Prepare driver/hardware state for scanning.
 	ic->ic_scan_start = rtwn_scan_start;
 	sc->sc_scan_curchan = ic->ic_scan_curchan;
+	// Start scanning on a	channel.
 	ic->ic_scan_curchan = rtwn_scan_curchan;
+	// Restore driver/hardware state  after  scanning  completes.
 	ic->ic_scan_end = rtwn_scan_end;
+	// Return the list of calibrated channels for the radio.
+	//  	The default method returns the current list of channels	
 	ic->ic_getradiocaps = rtwn_getradiocaps;
 	ic->ic_update_chw = rtwn_update_chw;
+	// Set	 the  current  radio  channel  using ic_curchan
 	ic->ic_set_channel = rtwn_set_channel;
 	ic->ic_transmit = rtwn_transmit;
 	ic->ic_parent = rtwn_parent;
-	ic->ic_vap_create = rtwn_vap_create;
+	// Create a vap instance of  the  specified  type
+	ic->ic_vap_create = rtwn_vap_create; // allocate ieee80211vap as driver-private state extend
+	// Destroy a vap instance created with	ic_vap_create.
 	ic->ic_vap_delete = rtwn_vap_delete;
 	ic->ic_wme.wme_update = rtwn_wme_update;
+	// Update hardware  state  after  an  802.11 IFS slot time
+	//   change.
 	ic->ic_updateslot = rtwn_update_slot;
+	// Update hardware for a change in the promiscuous mode setting
 	ic->ic_update_promisc = rtwn_update_promisc;
+	// Update hardware for a change in the	multicast packet filter
 	ic->ic_update_mcast = rtwn_update_mcast;
+	// Allocate and initialize a ieee80211_node structure.
 	ic->ic_node_alloc = rtwn_node_alloc;
+	// Update driver/device state for association to a new	AP (in station mode)
+	//  or when new station associates (in AP mode)
 	ic->ic_newassoc = rtwn_newassoc;
 	sc->sc_node_free = ic->ic_node_free;
+	// Reclaim storage of	a  node	 allocated  by	ic_node_alloc.
 	ic->ic_node_free = rtwn_node_free;
 
 	rtwn_postattach(sc);
 	rtwn_radiotap_attach(sc);
 
 	if (bootverbose)
-		ieee80211_announce(ic);
+		ieee80211_announce(ic); // wlan device is ok
 
 	return (0);
 
@@ -373,7 +394,7 @@ rtwn_detach(struct rtwn_softc *sc)
 		RTWN_CMDQ_UNLOCK(sc);
 
 		ieee80211_draintask(ic, &sc->cmdq_task);
-		ieee80211_ifdetach(ic);
+		ieee80211_ifdetach(ic); // free any ieee802.11 structures associated with the driver
 	}
 
 	rtwn_cmdq_destroy(sc);
@@ -465,10 +486,12 @@ rtwn_set_ic_opmode(struct rtwn_softc *sc)
 		ic->ic_opmode = IEEE80211_M_MONITOR;
 }
 
+// maintain driver-private state
+//   together with public IEEE80211 state
 static struct ieee80211vap *
 rtwn_vap_create(struct ieee80211com *ic, const char name[IFNAMSIZ], int unit,
     enum ieee80211_opmode opmode, int flags,
-    const uint8_t bssid[IEEE80211_ADDR_LEN],
+    const uint8_t bssid[IEEE80211_ADDR_LEN], // provide fixed BSSID or MAC address
     const uint8_t mac[IEEE80211_ADDR_LEN])
 {
 	struct rtwn_softc *sc = ic->ic_softc;
@@ -529,6 +552,8 @@ rtwn_vap_create(struct ieee80211com *ic, const char name[IFNAMSIZ], int unit,
 	}
 	RTWN_UNLOCK(sc);
 
+	// The vap creation	process
+	// 1. driver allocates the data structure
 	uvp = malloc(sizeof(struct rtwn_vap), M_80211_VAP, M_WAITOK | M_ZERO);
 	uvp->id = id;
 	if (id != RTWN_VAP_ID_INVALID) {
@@ -539,6 +564,8 @@ rtwn_vap_create(struct ieee80211com *ic, const char name[IFNAMSIZ], int unit,
 	vap = &uvp->vap;
 	/* enable s/w bmiss handling for sta mode */
 
+	// 2. setup vap with ieee80211_vap_setup to initializes  net80211  state
+	//  but not activate the interface
 	if (ieee80211_vap_setup(ic, vap, name, unit, opmode,
 	    flags | IEEE80211_CLONE_NOBEACONS, bssid) != 0) {
 		/* out of memory */
@@ -555,6 +582,7 @@ rtwn_vap_create(struct ieee80211com *ic, const char name[IFNAMSIZ], int unit,
 	rtwn_vap_preattach(sc, vap);
 
 	/* override state transition machine */
+	// 3. override methods
 	uvp->newstate = vap->iv_newstate;
 	if (opmode == IEEE80211_M_MONITOR)
 		vap->iv_newstate = rtwn_monitor_newstate;
@@ -587,9 +615,9 @@ rtwn_vap_create(struct ieee80211com *ic, const char name[IFNAMSIZ], int unit,
 	 */
 	ieee80211_ratectl_init(vap);
 
-	/* complete setup */
+	/* complete setup */ // 4. complete the process
 	ieee80211_vap_attach(vap, ieee80211_media_change,
-	    ieee80211_media_status, mac);
+	    ieee80211_media_status, mac);// net media status
 
 	RTWN_LOCK(sc);
 	rtwn_set_ic_opmode(sc);
@@ -639,7 +667,7 @@ rtwn_vap_delete(struct ieee80211vap *vap)
 	}
 
 	ieee80211_ratectl_deinit(vap);
-	ieee80211_vap_detach(vap);
+	ieee80211_vap_detach(vap); // deactivate the vap and isolate it from activities
 	free(uvp, M_80211_VAP);
 }
 
@@ -1425,7 +1453,7 @@ rtwn_dma_init(struct rtwn_softc *sc)
 
 	/* Set queue to USB pipe mapping. */
 	/* Note: PCIe devices are using some magic number here. */
-	reg = rtwn_get_qmap(sc);
+	reg = rtwn_get_qmap(sc); // some magic num
 	RTWN_CHK(rtwn_setbits_2(sc, R92C_TRXDMA_CTRL,
 	    R92C_TRXDMA_CTRL_QMAP_M, reg));
 
@@ -1786,7 +1814,7 @@ rtwn_init(struct rtwn_softc *sc)
 	sc->sc_flags |= RTWN_STARTED;
 
 	/* Power on adapter. */
-	error = rtwn_power_on(sc);
+	error = rtwn_power_on(sc); // r88eu_power_on
 	if (error != 0)
 		goto fail;
 

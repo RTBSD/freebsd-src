@@ -122,7 +122,7 @@ rtwn_tx_data(struct rtwn_softc *sc, struct ieee80211_node *ni,
 
 	RTWN_ASSERT_LOCKED(sc);
 
-	wh = mtod(m, struct ieee80211_frame *);
+	wh = mtod(m, struct ieee80211_frame *); // recv Mac frame
 	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 	ismcast = IEEE80211_IS_MULTICAST(wh->i_addr1);
 
@@ -183,7 +183,7 @@ rtwn_tx_data(struct rtwn_softc *sc, struct ieee80211_node *ni,
 		ieee80211_radiotap_tx(vap, m);
 	}
 
-	return (rtwn_tx_start(sc, ni, m, (uint8_t *)txd, type, 0));
+	return (rtwn_tx_start(sc, ni, m, (uint8_t *)txd, type, 0)); // send data
 }
 
 static int

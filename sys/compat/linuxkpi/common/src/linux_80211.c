@@ -7245,7 +7245,7 @@ linuxkpi_ieee80211_channel_to_frequency(uint32_t channel,
 {
 
 	switch (band) {
-	case NL80211_BAND_2GHZ:
+	case NL80211_BAND_2GHZ: // converts the IEEE channel num chan to MHz
 		return (ieee80211_ieee2mhz(channel, IEEE80211_CHAN_2GHZ));
 		break;
 	case NL80211_BAND_5GHZ:
@@ -7262,7 +7262,7 @@ linuxkpi_ieee80211_channel_to_frequency(uint32_t channel,
 uint32_t
 linuxkpi_ieee80211_frequency_to_channel(uint32_t freq, uint32_t flags __unused)
 {
-
+	// converts the freq (in MHz, e.g. 2GHz, 5GHz) to ieee802.11 channel num
 	return (ieee80211_mhz2ieee(freq, 0));
 }
 

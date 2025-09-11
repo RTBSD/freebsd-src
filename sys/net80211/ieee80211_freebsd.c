@@ -1163,13 +1163,13 @@ wlan_modevent(module_t mod, int type, void *unused)
 		wlan_bpfevent = EVENTHANDLER_REGISTER(bpf_track,
 		    bpf_track, 0, EVENTHANDLER_PRI_ANY);
 		wlan_ifllevent = EVENTHANDLER_REGISTER(iflladdr_event,
-		    wlan_iflladdr, NULL, EVENTHANDLER_PRI_ANY);
+		    wlan_iflladdr, NULL, EVENTHANDLER_PRI_ANY);  // event
 		struct if_clone_addreq req = {
 			.create_f = wlan_clone_create,
 			.destroy_f = wlan_clone_destroy,
 			.flags = IFC_F_AUTOUNIT,
-		};
-		wlan_cloner = ifc_attach_cloner(wlanname, &req);
+		}; // wlan is a kind of clonable ifnet, e.g. wlan0, wlan1
+		wlan_cloner = ifc_attach_cloner(wlanname, &req); // register to if_clone
 		return 0;
 	case MOD_UNLOAD:
 		ifc_detach_cloner(wlan_cloner);
@@ -1184,7 +1184,7 @@ static moduledata_t wlan_mod = {
 	wlanname,
 	wlan_modevent,
 	0
-};
+}; // wlan mod
 DECLARE_MODULE(wlan, wlan_mod, SI_SUB_DRIVERS, SI_ORDER_FIRST);
 MODULE_VERSION(wlan, 1);
 MODULE_DEPEND(wlan, ether, 1, 1, 1);

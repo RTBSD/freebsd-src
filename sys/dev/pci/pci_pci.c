@@ -95,6 +95,7 @@ static void		pcib_pcie_dll_timeout(void *arg, int pending);
 static int		pcib_request_feature_default(device_t pcib, device_t dev,
 			    enum pci_feature feature);
 
+// pci bridge
 static device_method_t pcib_methods[] = {
     /* Device interface */
     DEVMETHOD(device_probe,		pcib_probe),

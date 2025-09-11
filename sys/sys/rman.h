@@ -110,14 +110,18 @@ struct resource_map;
 
 TAILQ_HEAD(resource_head, resource_i);
 
+// The rman	set of functions provides a flexible resource  management  ab-
+//       straction. It implements the abstractions of region and resource.
+// A region  descriptor is  used to manage a region; this could be memory or some other form of
+//       bus space.
 struct rman {
 	struct	resource_head 	rm_list;
-	struct	mtx *rm_mtx;	/* mutex used to protect rm_list */
+	struct	mtx *rm_mtx;	/* mutex used to protect rm_list */ // mutex associated
 	TAILQ_ENTRY(rman)	rm_link; /* link in list of all rmans */
-	rman_res_t	rm_start;	/* index of globally first entry */
+	rman_res_t	rm_start;	/* index of globally first entry */ // limit of the range of acceptable resource addr
 	rman_res_t	rm_end;	/* index of globally last entry */
-	enum	rman_type rm_type; /* what type of resource this is */
-	const	char *rm_descr;	/* text descripion of this resource */
+	enum	rman_type rm_type; /* what type of resource this is */ // !
+	const	char *rm_descr;	/* text descripion of this resource */ // !
 };
 TAILQ_HEAD(rman_head, rman);
 

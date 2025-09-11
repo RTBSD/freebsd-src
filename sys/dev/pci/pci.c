@@ -4568,7 +4568,7 @@ pci_attach(device_t dev)
 {
 	int busno, domain, error;
 
-	error = pci_attach_common(dev);
+	error = pci_attach_common(dev); // (6) found pci bus
 	if (error)
 		return (error);
 

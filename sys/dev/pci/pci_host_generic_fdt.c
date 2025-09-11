@@ -93,7 +93,7 @@ generic_pcie_fdt_probe(device_t dev)
 		return (ENXIO);
 
 	if (ofw_bus_is_compatible(dev, "pci-host-ecam-generic")) {
-		device_set_desc(dev, "Generic PCI host controller");
+		device_set_desc(dev, "Generic PCI host controller"); // (0) find matach pci host driver
 		return (BUS_PROBE_GENERIC);
 	}
 	if (ofw_bus_is_compatible(dev, "arm,gem5_pcie")) {
@@ -118,11 +118,11 @@ pci_host_generic_setup_fdt(device_t dev)
 	/* Retrieve 'ranges' property from FDT */
 	if (bootverbose)
 		device_printf(dev, "parsing FDT for ECAM%d:\n", sc->base.ecam);
-	if (parse_pci_mem_ranges(dev, &sc->base))
+	if (parse_pci_mem_ranges(dev, &sc->base)) // (2) parse pci host mem rangs
 		return (ENXIO);
 
 	/* Attach OFW bus */
-	if (generic_pcie_ofw_bus_attach(dev) != 0)
+	if (generic_pcie_ofw_bus_attach(dev) != 0) // (3) parse pci reg space
 		return (ENXIO);
 
 	node = ofw_bus_get_node(dev);
@@ -143,7 +143,7 @@ pci_host_generic_setup_fdt(device_t dev)
 	 * by different drivers, this ensures that there are
 	 * no collisions.
 	 */
-	sc->base.ecam = device_get_unit(dev);
+	sc->base.ecam = device_get_unit(dev); // (4) e.g. 0
 
 	error = pci_host_generic_core_attach(dev);
 	if (error != 0)
@@ -166,7 +166,7 @@ pci_host_generic_fdt_attach(device_t dev)
 {
 	int error;
 
-	error = pci_host_generic_setup_fdt(dev);
+	error = pci_host_generic_setup_fdt(dev); // (1) setup pci host
 	if (error != 0)
 		return (error);
 
@@ -187,11 +187,11 @@ parse_pci_mem_ranges(device_t dev, struct generic_pcie_core_softc *sc)
 	node = ofw_bus_get_node(dev);
 
 	OF_getencprop(node, "#address-cells", &pci_addr_cells,
-					sizeof(pci_addr_cells));
+					sizeof(pci_addr_cells)); // (2.1) get address cell num, e.g. 3
 	OF_getencprop(node, "#size-cells", &size_cells,
-					sizeof(size_cells));
+					sizeof(size_cells)); // (2.1) get address cell size, e.g. 2
 	OF_getencprop(OF_parent(node), "#address-cells", &parent_addr_cells,
-					sizeof(parent_addr_cells));
+					sizeof(parent_addr_cells)); // (2.1) get parent address cell num, e.g. simple-bus, 2
 
 	if (parent_addr_cells > 2 || pci_addr_cells != 3 || size_cells > 2) {
 		device_printf(dev,
@@ -199,36 +199,42 @@ parse_pci_mem_ranges(device_t dev, struct generic_pcie_core_softc *sc)
 		return (ENXIO);
 	}
 
-	nbase_ranges = OF_getproplen(node, "ranges");
+	nbase_ranges = OF_getproplen(node, "ranges"); // (2.2) get mem ranges total len
 	sc->nranges = nbase_ranges / sizeof(cell_t) /
-	    (parent_addr_cells + pci_addr_cells + size_cells);
+	    (parent_addr_cells + pci_addr_cells + size_cells); // (2.2) e.g 3 + 2 + 2 = 7
 	base_ranges = malloc(nbase_ranges, M_DEVBUF, M_WAITOK);
 	OF_getencprop(node, "ranges", base_ranges, nbase_ranges);
 
+	// (2.2) fetch base_ranges, I/0, 32bit MMIO, 64bit MMIO
+	//  <attribute, PCIe addr, CPU addr,  Size>
+    /* ranges = <0x01000000 0x00 0x00000000 0x0  0x50000000  0x0  0x00f00000
+              0x02000000 0x00 0x58000000 0x0 0x58000000 0x0 0x28000000
+              0x03000000 0x10 0x00000000 0x10 0x00000000 0x10  0x00000000>; */
+
 	for (i = 0, j = 0; i < sc->nranges; i++) {
 		attributes = (base_ranges[j++] >> SPACE_CODE_SHIFT) & \
-							SPACE_CODE_MASK;
+							SPACE_CODE_MASK; // (2.2) check attribute bit[25:24]
 		if (attributes == SPACE_CODE_IO_SPACE) {
 			sc->ranges[i].flags |= FLAG_TYPE_IO;
 		} else {
-			sc->ranges[i].flags |= FLAG_TYPE_MEM;
+			sc->ranges[i].flags |= FLAG_TYPE_MEM; // (2.2) io space type
 		}
 
 		sc->ranges[i].rid = -1;
 		sc->ranges[i].pci_base = 0;
 		for (k = 0; k < (pci_addr_cells - 1); k++) {
 			sc->ranges[i].pci_base <<= 32;
-			sc->ranges[i].pci_base |= base_ranges[j++];
+			sc->ranges[i].pci_base |= base_ranges[j++]; // (2.2) check pci addr
 		}
 		sc->ranges[i].phys_base = 0;
 		for (k = 0; k < parent_addr_cells; k++) {
 			sc->ranges[i].phys_base <<= 32;
-			sc->ranges[i].phys_base |= base_ranges[j++];
+			sc->ranges[i].phys_base |= base_ranges[j++]; // (2.2) check cpu addr
 		}
 		sc->ranges[i].size = 0;
 		for (k = 0; k < size_cells; k++) {
 			sc->ranges[i].size <<= 32;
-			sc->ranges[i].size |= base_ranges[j++];
+			sc->ranges[i].size |= base_ranges[j++]; // (2.2) check space size
 		}
 	}
 
@@ -446,18 +452,19 @@ generic_pcie_ofw_bus_attach(device_t dev)
 	if (parent == 0)
 		return (0);
 
-	/* Iterate through all bus subordinates */
+	/* Iterate through all bus subordinates */ // (3.0) search for children, may be null here
 	for (node = OF_child(parent); node > 0; node = OF_peer(node)) {
 		len = OF_getencprop(node, "reg", reg, sizeof(reg));
-		if (len != 5 * sizeof(pcell_t))
+		if (len != 5 * sizeof(pcell_t)) // (3.1) check reg space size
 			continue;
 
 		/* Allocate and populate devinfo. */
 		di = malloc(sizeof(*di), M_DEVBUF, M_WAITOK | M_ZERO);
-		if (ofw_bus_gen_setup_devinfo(&di->di_dinfo, node) != 0) {
+		if (ofw_bus_gen_setup_devinfo(&di->di_dinfo, node) != 0) { // (3.2) get some info from dtb, e.g "device_type"
 			free(di, M_DEVBUF);
 			continue;
 		}
+
 		di->func = OFW_PCI_PHYS_HI_FUNCTION(reg[0]);
 		di->slot = OFW_PCI_PHYS_HI_DEVICE(reg[0]);
 		di->bus = OFW_PCI_PHYS_HI_BUS(reg[0]);

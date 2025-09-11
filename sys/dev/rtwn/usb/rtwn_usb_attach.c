@@ -98,7 +98,7 @@ rtwn_usb_match(device_t self)
 	if (uaa->info.bIfaceIndex != RTWN_IFACE_INDEX)
 		return (ENXIO);
 
-	return (usbd_lookup_id_by_uaa(rtwn_devs, sizeof(rtwn_devs), uaa));
+	return (usbd_lookup_id_by_uaa(rtwn_devs, sizeof(rtwn_devs), uaa)); // is the device a kind rtwn
 }
 
 static int
@@ -332,8 +332,8 @@ rtwn_usb_attach_methods(struct rtwn_softc *sc)
 	sc->sc_read_2		= rtwn_usb_read_2;
 	sc->sc_read_4		= rtwn_usb_read_4;
 	sc->sc_delay		= rtwn_usb_delay;
-	sc->sc_tx_start		= rtwn_usb_tx_start;
-	sc->sc_start_xfers	= rtwn_usb_start_xfers;
+	sc->sc_tx_start		= rtwn_usb_tx_start; // callback for data sending
+	sc->sc_start_xfers	= rtwn_usb_start_xfers; // enable xfer ep
 	sc->sc_reset_lists	= rtwn_usb_reset_lists;
 	sc->sc_abort_xfers	= rtwn_usb_abort_xfers;
 	sc->sc_fw_write_block	= rtwn_usb_fw_write_block;
@@ -391,14 +391,14 @@ rtwn_usb_attach(device_t self)
 	rtwn_usb_sysctlattach(sc);
 	mtx_init(&sc->sc_mtx, ic->ic_name, MTX_NETWORK_LOCK, MTX_DEF);
 
-	rtwn_usb_attach_methods(sc);
-	rtwn_usb_attach_private(uc, USB_GET_DRIVER_INFO(uaa));
+	rtwn_usb_attach_methods(sc); // install some callbacks
+	rtwn_usb_attach_private(uc, USB_GET_DRIVER_INFO(uaa)); // call attach func by model
 
 	error = rtwn_usb_setup_endpoints(uc);
 	if (error != 0)
 		goto detach;
 
-	/* Allocate Tx/Rx buffers. */
+	/* Allocate Tx/Rx buffers. */ // allocate rx/tx buf/mbuf
 	error = rtwn_usb_alloc_rx_list(sc);
 	if (error != 0)
 		goto detach;
@@ -408,7 +408,7 @@ rtwn_usb_attach(device_t self)
 		goto detach;
 
 	/* Generic attach. */
-	error = rtwn_attach(sc);
+	error = rtwn_attach(sc); // common attach func
 	if (error != 0)
 		goto detach;
 

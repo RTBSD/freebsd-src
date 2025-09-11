@@ -114,6 +114,7 @@ r88ee_adj_devcaps(struct rtwn_softc *sc)
 	/* XXX TODO */
 }
 
+// private attach func
 void
 r88ee_attach(struct rtwn_pci_softc *pc)
 {

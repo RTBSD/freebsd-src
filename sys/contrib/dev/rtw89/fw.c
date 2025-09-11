@@ -770,7 +770,7 @@ static void rtw89_fw_iterate_feature_cfg(struct rtw89_fw_info *fw,
 		if (chip->chip_id != ent->chip_id)
 			continue;
 
-		if (ent->cond(ver_code, ent->ver_code))
+		if (ent->cond(ver_code, ent->ver_code)) // set feature by model
 			RTW89_SET_FW_FEATURE(ent->feature, fw);
 	}
 }
@@ -803,6 +803,7 @@ rtw89_early_fw_feature_recognize(struct device *device,
 		rtw89_fw_get_filename(fw_name, sizeof(fw_name),
 				      chip->fw_basename, fw_format);
 
+		// load firmware->data from filesystem
 		ret = request_firmware(&firmware, fw_name, device);
 		if (!ret) {
 			dev_info(device, "loaded firmware %s\n", fw_name);

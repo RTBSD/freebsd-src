@@ -73,6 +73,8 @@ ieee80211_regdomain_attach(struct ieee80211com *ic)
 		/* NB: driver calls ieee80211_init_channels or similar */
 	}
 	ic->ic_getradiocaps = null_getradiocaps;
+	// Process a request to change	regulatory state.
+	// e.g. reduce transmit power caps
 	ic->ic_setregdomain = null_setregdomain;
 }
 

@@ -797,7 +797,7 @@ ieee80211_ioctl_get80211(struct ieee80211vap *vap, u_long cmd,
 		switch (vap->iv_state) {
 		case IEEE80211_S_INIT:
 		case IEEE80211_S_SCAN:
-			ireq->i_len = vap->iv_des_ssid[0].len;
+			ireq->i_len = vap->iv_des_ssid[0].len; // request the SSID
 			memcpy(tmpssid, vap->iv_des_ssid[0].ssid, ireq->i_len);
 			break;
 		default:
@@ -805,6 +805,7 @@ ieee80211_ioctl_get80211(struct ieee80211vap *vap, u_long cmd,
 			memcpy(tmpssid, vap->iv_bss->ni_essid, ireq->i_len);
 			break;
 		}
+		// copying SSID into i_data buffer
 		error = copyout(tmpssid, ireq->i_data, ireq->i_len);
 		break;
 	case IEEE80211_IOC_NUMSSIDS:
@@ -829,25 +830,25 @@ ieee80211_ioctl_get80211(struct ieee80211vap *vap, u_long cmd,
 		} else {
 			bzero(tmpkey, len);
 		}
-		ireq->i_len = len;
+		ireq->i_len = len; // Returns the requested WEP key
 		error = copyout(tmpkey, ireq->i_data, len);
 		break;
 	case IEEE80211_IOC_NUMWEPKEYS:
-		ireq->i_val = IEEE80211_WEP_NKID;
+		ireq->i_val = IEEE80211_WEP_NKID; //  number of WEP keys supported
 		break;
 	case IEEE80211_IOC_WEPTXKEY:
 		ireq->i_val = vap->iv_def_txkey;
 		break;
 	case IEEE80211_IOC_AUTHMODE:
-		if (vap->iv_flags & IEEE80211_F_WPA)
+		if (vap->iv_flags & IEEE80211_F_WPA) // current authentication mode
 			ireq->i_val = IEEE80211_AUTH_WPA;
 		else
 			ireq->i_val = vap->iv_bss->ni_authmode;
 		break;
-	case IEEE80211_IOC_CHANNEL:
+	case IEEE80211_IOC_CHANNEL: // current direct channel in use
 		ireq->i_val = ieee80211_chan2ieee(ic, ic->ic_curchan);
 		break;
-	case IEEE80211_IOC_POWERSAVE:
+	case IEEE80211_IOC_POWERSAVE: // power-saving mode
 		if (vap->iv_flags & IEEE80211_F_PMGTON)
 			ireq->i_val = IEEE80211_POWERSAVE_ON;
 		else
@@ -2779,11 +2780,11 @@ ieee80211_ioctl_set80211(struct ieee80211vap *vap, u_long cmd, struct ieee80211r
 		memset(vap->iv_des_ssid[0].ssid, 0, IEEE80211_NWID_LEN);
 		vap->iv_des_ssid[0].len = ireq->i_len;
 		memcpy(vap->iv_des_ssid[0].ssid, tmpssid, ireq->i_len);
-		vap->iv_des_nssid = (ireq->i_len > 0);
+		vap->iv_des_nssid = (ireq->i_len > 0); // Set the desired SSID
 		error = ENETRESET;
 		break;
 	case IEEE80211_IOC_WEP:
-		switch (ireq->i_val) {
+		switch (ireq->i_val) { // Set the current WEP mode
 		case IEEE80211_WEP_OFF:
 			vap->iv_flags &= ~IEEE80211_F_PRIVACY;
 			vap->iv_flags &= ~IEEE80211_F_DROPUNENC;
@@ -2799,7 +2800,7 @@ ieee80211_ioctl_set80211(struct ieee80211vap *vap, u_long cmd, struct ieee80211r
 		}
 		error = ENETRESET;
 		break;
-	case IEEE80211_IOC_WEPKEY:
+	case IEEE80211_IOC_WEPKEY: // Set the WEP key
 		kid = (u_int) ireq->i_val;
 		if (kid >= IEEE80211_WEP_NKID)
 			return EINVAL;
@@ -2828,7 +2829,7 @@ ieee80211_ioctl_set80211(struct ieee80211vap *vap, u_long cmd, struct ieee80211r
 			error = EINVAL;
 		ieee80211_key_update_end(vap);
 		break;
-	case IEEE80211_IOC_WEPTXKEY:
+	case IEEE80211_IOC_WEPTXKEY: // Set the WEP key used for transmission
 		kid = (u_int) ireq->i_val;
 		if (kid >= IEEE80211_WEP_NKID &&
 		    (uint16_t) kid != IEEE80211_KEYIX_NONE)
@@ -2845,7 +2846,7 @@ ieee80211_ioctl_set80211(struct ieee80211vap *vap, u_long cmd, struct ieee80211r
 		ieee80211_crypto_set_deftxkey(vap, kid);
 		ieee80211_key_update_end(vap);
 		break;
-	case IEEE80211_IOC_AUTHMODE:
+	case IEEE80211_IOC_AUTHMODE: // Set the current authorization mode
 		switch (ireq->i_val) {
 		case IEEE80211_AUTH_WPA:
 		case IEEE80211_AUTH_8021X:	/* 802.1x */

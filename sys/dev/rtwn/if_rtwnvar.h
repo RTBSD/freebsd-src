@@ -105,8 +105,8 @@ struct rtwn_node {
 #define RTWN_NODE(ni)		((struct rtwn_node *)(ni))
 
 struct rtwn_vap {
-	struct ieee80211vap	vap;
-	int			id;
+	struct ieee80211vap	vap; // must have an ieee80211vap at the front
+	int			id; // extend with driver-private state
 #define RTWN_VAP_ID_INVALID	-1
 	int			curr_mode;
 

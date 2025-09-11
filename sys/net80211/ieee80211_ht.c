@@ -230,6 +230,7 @@ void
 ieee80211_ht_attach(struct ieee80211com *ic)
 {
 	/* setup default aggregation policy */
+	// Process  a	received  Action  frame.
 	ic->ic_recv_action = ieee80211_recv_action;
 	ic->ic_send_action = ieee80211_send_action;
 	ic->ic_ampdu_enable = ieee80211_ampdu_enable;

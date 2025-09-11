@@ -134,7 +134,7 @@ struct ieee80211_frame;
 
 struct net80211dump_methods;
 
-struct ieee80211com {
+struct ieee80211com { // per-device structure
 	void			*ic_softc;	/* driver softc */
 	const char		*ic_name;	/* usually device name */
 	ieee80211_com_lock_t	ic_comlock;	/* state update lock */
