@@ -82,7 +82,8 @@ int
 ieee80211_priv_check_vap_getkey(u_long cmd __unused,
      struct ieee80211vap *vap __unused, struct ifnet *ifp __unused)
 {
-
+	// check  to	 see if	specific system	privileges are
+	//        granted to the passed thread
 	return (priv_check(curthread, PRIV_NET80211_VAP_GETKEY));
 }
 
@@ -172,6 +173,8 @@ wlan_clone_destroy(struct if_clone *ifc, struct ifnet *ifp, uint32_t flags)
 	struct ieee80211vap *vap = ifp->if_softc;
 	struct ieee80211com *ic = vap->iv_ic;
 
+	// rtwn_vap_delete, called when an SIOCIFDESTROY ioctl request is made
+	//  or when device detaches
 	ic->ic_vap_delete(vap);
 
 	return (0);

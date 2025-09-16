@@ -334,7 +334,7 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	/* Create a taskqueue for all state changes */
 	ic->ic_tq = taskqueue_create("ic_taskq",
 	    IEEE80211_M_WAITOK | IEEE80211_M_ZERO,
-	    taskqueue_thread_enqueue, &ic->ic_tq);
+	    taskqueue_thread_enqueue, &ic->ic_tq); // taskqueue
 	taskqueue_start_threads(&ic->ic_tq, 1, PI_NET, "%s net80211 taskq",
 	    ic->ic_name);
 	ic->ic_ierrors = counter_u64_alloc(IEEE80211_M_WAITOK);

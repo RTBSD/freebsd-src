@@ -39,6 +39,10 @@
 #define RTWN_LED_LINK		0
 #define RTWN_LED_DATA		1
 
+// A  net80211	device
+//       driver supporting radiotap defines two packed structures	that it	shares
+//       with   net80211.	   These   structures	embed	an   instance	of   a
+//       ieee80211_radiotap_header structure at the beginning, 
 struct rtwn_rx_radiotap_header {
 	struct ieee80211_radiotap_header wr_ihdr;
 	uint64_t	wr_tsft;
@@ -49,6 +53,8 @@ struct rtwn_rx_radiotap_header {
 	int8_t		wr_dbm_antsignal;
 	int8_t		wr_dbm_antnoise;
 } __packed __aligned(8);
+
+// Radiotap	receive	definitions
 
 #define RTWN_RX_RADIOTAP_PRESENT			\
 	(1 << IEEE80211_RADIOTAP_TSFT |			\
@@ -65,6 +71,8 @@ struct rtwn_tx_radiotap_header {
 	uint16_t	wt_chan_freq;
 	uint16_t	wt_chan_flags;
 } __packed;
+
+// and transmit definitions
 
 #define RTWN_TX_RADIOTAP_PRESENT			\
 	(1 << IEEE80211_RADIOTAP_FLAGS |		\
@@ -167,7 +175,7 @@ enum {
 };
 
 struct rtwn_softc {
-	struct ieee80211com	sc_ic;
+	struct ieee80211com	sc_ic; // pre-device
 	struct mbufq		sc_snd;
 	device_t		sc_dev;
 

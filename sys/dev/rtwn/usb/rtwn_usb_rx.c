@@ -376,7 +376,7 @@ rtwn_bulk_rx_callback(struct usb_xfer *xfer, usb_error_t error)
 		if (data == NULL)
 			goto tr_setup;
 		STAILQ_REMOVE_HEAD(&uc->uc_rx_active, next);
-		m = rtwn_report_intr(uc, xfer, data);
+		m = rtwn_report_intr(uc, xfer, data); // conver recv data to mbuf
 		STAILQ_INSERT_TAIL(&uc->uc_rx_inactive, data, next);
 		/* FALLTHROUGH */
 	case USB_ST_SETUP:
@@ -387,7 +387,7 @@ tr_setup:
 			goto finish;
 		}
 		STAILQ_REMOVE_HEAD(&uc->uc_rx_inactive, next);
-		STAILQ_INSERT_TAIL(&uc->uc_rx_active, data, next);
+		STAILQ_INSERT_TAIL(&uc->uc_rx_active, data, next); // expect data in next stage
 		usbd_xfer_set_frame_data(xfer, 0, data->buf,
 		    usbd_xfer_max_len(xfer));
 		usbd_transfer_submit(xfer);
@@ -400,7 +400,7 @@ tr_setup:
 		m0 = m;
 		while (m != NULL) {
 			M_ASSERTPKTHDR(m);
-			m->m_pkthdr.PH_loc.ptr = rtwn_rx_frame(sc, m);
+			m->m_pkthdr.PH_loc.ptr = rtwn_rx_frame(sc, m); // recv frame
 			m = m->m_nextpkt;
 		}
 		RTWN_UNLOCK(sc);
@@ -409,9 +409,12 @@ tr_setup:
 			next = m->m_nextpkt;
 			m->m_nextpkt = NULL;
 
-			ni = m->m_pkthdr.PH_loc.ptr;
+			ni = m->m_pkthdr.PH_loc.ptr; // node from which the frame was received
 			m->m_pkthdr.PH_loc.ptr = NULL;
-			if (ni != NULL) {
+			// takes an mbuf chain m containing a com-
+			//      plete 802.11 frame from the driver ic and passes it to the software
+			//      802.11 stack for input processing.
+			if (ni != NULL) { /* packet capture handled in net80211 */
 				(void)ieee80211_input_mimo(ni, m);
 				ieee80211_free_node(ni);
 			} else {

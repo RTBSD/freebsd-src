@@ -563,7 +563,7 @@ sta_input(struct ieee80211_node *ni, struct mbuf *m,
 	 * ieee80211_frame_min (or other shorter frames) w/o first
 	 * validating the data is present.
 	 */
-	wh = mtod(m, struct ieee80211_frame *);
+	wh = mtod(m, struct ieee80211_frame *); // get receved frame data
 
 	if (m->m_pkthdr.len < 2 || m->m_pkthdr.len < ieee80211_anyhdrsize(wh)) {
 		IEEE80211_DISCARD_MAC(vap, IEEE80211_MSG_ANY,
@@ -663,8 +663,8 @@ sta_input(struct ieee80211_node *ni, struct mbuf *m,
 		}
 	}
 
-	switch (type) {
-	case IEEE80211_FC0_TYPE_DATA:
+	switch (type) { // which type of frame
+	case IEEE80211_FC0_TYPE_DATA: // data
 		hdrspace = ieee80211_hdrspace(ic, wh);
 		if (m->m_len < hdrspace &&
 		    (m = m_pullup(m, hdrspace)) == NULL) {
@@ -905,7 +905,7 @@ sta_input(struct ieee80211_node *ni, struct mbuf *m,
 		ieee80211_deliver_data(vap, ni, m);
 		return IEEE80211_FC0_TYPE_DATA;
 
-	case IEEE80211_FC0_TYPE_MGT:
+	case IEEE80211_FC0_TYPE_MGT: // mgmt
 		vap->iv_stats.is_rx_mgmt++;
 		IEEE80211_NODE_STAT(ni, rx_mgmt);
 		if (dir != IEEE80211_FC1_DIR_NODS) {
@@ -977,7 +977,7 @@ sta_input(struct ieee80211_node *ni, struct mbuf *m,
 		vap->iv_recv_mgmt(ni, m, subtype, rxs, rssi, nf);
 		goto out;
 
-	case IEEE80211_FC0_TYPE_CTL:
+	case IEEE80211_FC0_TYPE_CTL: // ctrl
 		vap->iv_stats.is_rx_ctl++;
 		IEEE80211_NODE_STAT(ni, rx_ctrl);
 		vap->iv_recv_ctl(ni, m, subtype);

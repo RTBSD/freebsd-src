@@ -144,7 +144,8 @@ ieee80211_ni_chw_to_str(enum ieee80211_sta_rx_bw bw)
  * to derive from this structure to add device-specific per-node
  * state.  This is done by overriding the ic_node_* methods in
  * the ieee80211com structure.
- */
+ */ // The  net80211  layer  that  supports  802.11 device drivers maintains a
+// database	of peer	stations called	the "node table" 
 struct ieee80211_node {
 	struct ieee80211vap	*ni_vap;	/* associated vap */
 	struct ieee80211com	*ni_ic;		/* copy from vap to save deref*/

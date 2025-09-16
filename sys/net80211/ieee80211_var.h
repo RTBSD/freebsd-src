@@ -116,7 +116,7 @@
  * Data common to one or more virtual AP's.  State shared by
  * the underlying device and the net80211 layer is exposed here;
  * e.g. device-specific callbacks.
- */
+ */ // 802.11 network layer virtual radio support
 struct ieee80211vap;
 typedef void (*ieee80211vap_attach)(struct ieee80211vap *);
 
@@ -162,6 +162,7 @@ struct ieee80211com { // per-device structure
 	uint32_t		ic_flags_ext;	/* extended state flags */
 	uint32_t		ic_flags_ht;	/* HT state flags */
 	uint32_t		ic_flags_ven;	/* vendor state flags */
+	// Device/driver capabilities;
 	uint32_t		ic_caps;	/* capabilities */
 	uint32_t		ic_htcaps;	/* HT capabilities */
 	uint32_t		ic_htextcaps;	/* HT extended capabilities */
@@ -200,7 +201,11 @@ struct ieee80211com { // per-device structure
 	 *    lookups when switching back+forth between two channels
 	 *    (e.g. for dynamic turbo)
 	 */
+	// Number of entries in ic_channels.
 	int			ic_nchans;	/* # entries in ic_channels */
+	// Table  of  channels	the device is capable of operating on.
+	// This is initially  provided	 by  the  driver  but  may  be
+	// changed through calls that change the regulatory state.
 	struct ieee80211_channel ic_channels[IEEE80211_CHAN_MAX];
 	uint8_t			ic_chan_avail[IEEE80211_CHAN_BYTES];
 	uint8_t			ic_chan_active[IEEE80211_CHAN_BYTES];
@@ -766,19 +771,24 @@ MALLOC_DECLARE(M_80211_VAP);
 #define	IEEE80211_COM_REF_MAX	(IEEE80211_COM_REF >> IEEE80211_COM_REF_S)
 
 int	ic_printf(struct ieee80211com *, const char *, ...) __printflike(2, 3);
+// attaches the wireless network interface ic to the 802.11 network  stack  layer
 void	ieee80211_ifattach(struct ieee80211com *);
+// frees any IEEE80211 structures associated with the driver
 void	ieee80211_ifdetach(struct ieee80211com *);
 void	ieee80211_set_software_ciphers(struct ieee80211com *,
 	    uint32_t cipher_suite);
 void	ieee80211_set_hardware_ciphers(struct ieee80211com *,
 	    uint32_t cipher_suite);
+// initializes net80211 state but does not activate the interface.
 int	ieee80211_vap_setup(struct ieee80211com *, struct ieee80211vap *,
 		const char name[IFNAMSIZ], int unit,
 		enum ieee80211_opmode opmode, int flags,
 		const uint8_t bssid[IEEE80211_ADDR_LEN]);
+// complete net80211 state init
 int	ieee80211_vap_attach(struct ieee80211vap *,
 		ifm_change_cb_t, ifm_stat_cb_t,
 		const uint8_t macaddr[IEEE80211_ADDR_LEN]);
+// delete vap
 void	ieee80211_vap_detach(struct ieee80211vap *);
 const struct ieee80211_rateset *ieee80211_get_suprates(struct ieee80211com *ic,
 		const struct ieee80211_channel *);
@@ -793,12 +803,16 @@ struct ieee80211com *ieee80211_find_com(const char *name);
 typedef void ieee80211_com_iter_func(void *, struct ieee80211com *);
 void	ieee80211_iterate_coms(ieee80211_com_iter_func *, void *);
 int	ieee80211_media_change(struct ifnet *);
+// device-independent  handlers  for ifmedia commands
+//  not intended to be called directly.
 void	ieee80211_media_status(struct ifnet *, struct ifmediareq *);
 int	ieee80211_ioctl(struct ifnet *, u_long, caddr_t);
 int	ieee80211_rate2media(struct ieee80211com *, int,
 		enum ieee80211_phymode);
 int	ieee80211_media2rate(int);
+// converts the	frequency freq(specified in MHz) to an	IEEE 802.11 channel number
 int	ieee80211_mhz2ieee(u_int, u_int);
+// converts the IEEE channel number  chan  to a  frequency  (in MHz)
 int	ieee80211_chan2ieee(struct ieee80211com *,
 		const struct ieee80211_channel *);
 u_int	ieee80211_ieee2mhz(u_int, u_int);
@@ -827,7 +841,10 @@ struct ieee80211_channel *ieee80211_find_channel_byieee(struct ieee80211com *,
 		int ieee, int flags);
 struct ieee80211_channel *ieee80211_lookup_channel_rxstatus(struct ieee80211vap *,
 		const struct ieee80211_rx_stats *);
+// change the mode of the driver's PHY
 int	ieee80211_setmode(struct ieee80211com *, enum ieee80211_phymode);
+// returns the PHY  mode required  for use  with  the  channel	chan
+//   typically used when selecting a rate set, to be advertised in beacons
 enum ieee80211_phymode ieee80211_chan2mode(const struct ieee80211_channel *);
 uint32_t ieee80211_mac_hash(const struct ieee80211com *,
 		const uint8_t addr[IEEE80211_ADDR_LEN]);
@@ -837,6 +854,12 @@ char	ieee80211_channel_type_char(const struct ieee80211_channel *c);
 #define	ieee80211_get_home_channel(_ic)		((_ic)->ic_bsschan)
 #define	ieee80211_get_vap_desired_channel(_iv)	((_iv)->iv_des_chan)
 
+// The  net80211  layer  used by 802.11 drivers includes support for a de-
+//       vice-independent	packet capture format called radiotap that  is	under-
+//       stood  by tools such as tcpdump(1)
+// This facility is designed for capuring 802.11 traffic, including	information 
+//		 that is not part  of  the
+//       normal 802.11 frame structure.
 void	ieee80211_radiotap_attach(struct ieee80211com *,
 	    struct ieee80211_radiotap_header *th, int tlen,
 		uint32_t tx_radiotap,

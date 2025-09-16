@@ -97,6 +97,10 @@ ieee80211_input_mimo(struct ieee80211_node *ni, struct mbuf *m)
 	ieee80211_process_mimo(ni, &rxs);
 
 	//return ieee80211_input(ni, m, rx->rssi, rx->nf);
+	// The arguments rssi and stamp are
+	//      typically derived from on-card data structures; they are used for record-
+	//      ing the signal strength and time received of the frame respectively.
+	// for station mode, call sta_input
 	return ni->ni_vap->iv_input(ni, m, &rxs, rxs.c_rssi, rxs.c_nf);
 }
 

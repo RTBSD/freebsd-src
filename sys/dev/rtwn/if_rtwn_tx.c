@@ -179,8 +179,8 @@ rtwn_tx_data(struct rtwn_softc *sc, struct ieee80211_node *ni,
 
 		tap->wt_flags = rtwn_tx_radiotap_flags(sc, txd);
 		if (k != NULL)
-			tap->wt_flags |= IEEE80211_RADIOTAP_F_WEP;
-		ieee80211_radiotap_tx(vap, m);
+			tap->wt_flags |= IEEE80211_RADIOTAP_F_WEP; /* record transmit state */
+		ieee80211_radiotap_tx(vap, m); /* capture transmit	event */
 	}
 
 	return (rtwn_tx_start(sc, ni, m, (uint8_t *)txd, type, 0)); // send data

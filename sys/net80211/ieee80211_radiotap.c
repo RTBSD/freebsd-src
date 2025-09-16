@@ -69,6 +69,10 @@ ieee80211_radiotap_attachv(struct ieee80211com *ic,
 #define	B(_v)	(1<<(_v))
 	int off;
 
+	// With  radiotap  setup,  drivers just need to fill in per-packet capture
+    //   state for frames	sent/received and dispatch capture state in the	trans-
+    //   mit path	(since control is not returned to the  net80211	 layer	before
+    //   the  packet  is	handed to the device)
 	th->it_len = htole16(roundup2(tlen, sizeof(uint32_t)));
 	th->it_present = htole32(tx_radiotap);
 	ic->ic_th = th;
@@ -86,7 +90,7 @@ ieee80211_radiotap_attachv(struct ieee80211com *ic,
 		ic->ic_txchan = ((uint8_t *) th) + off;
 
 	rh->it_len = htole16(roundup2(rlen, sizeof(uint32_t)));
-	rh->it_present = htole32(rx_radiotap);
+	rh->it_present = htole32(rx_radiotap); // it_present bitmap to indicate which fields exist
 	ic->ic_rh = rh;
 	/* calculate offset to channel data */
 	off = -1;
