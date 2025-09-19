@@ -195,6 +195,20 @@
 			status = "disabled";
 		};
 
+		sata0: sata@31a40000 {
+			compatible = "generic-ahci";
+			reg = <0x0 0x31a40000 0x0 0x1000>;
+			interrupts = <GIC_SPI 42 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
+		};
+
+		sata1: sata@32014000 {
+			compatible = "generic-ahci";
+			reg = <0x0 0x32014000 0x0 0x1000>;
+			interrupts = <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
+		};
+
 		pcie: pcie@40000000 {
 			compatible = "pci-host-ecam-generic";
 			device_type = "pci";

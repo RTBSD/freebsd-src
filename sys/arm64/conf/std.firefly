@@ -7,6 +7,8 @@ options 	SOC_FIREFLY_V1
 options 	SOC_FIREFLY_V2
 options 	SOC_FIREFLY_V3
 
+nooptions 	PCI_HP			# PCI-Express native HotPlug
+nooptions 	PCI_IOV			# PCI SR-IOV support
 
 # DTBs
 makeoptions	MODULES_EXTRA+="dtb/firefly"
